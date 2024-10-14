@@ -1,135 +1,165 @@
 using System;
-using System.IO;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using System.Collections.Generic;
+using Azure.Identity;
+using Azure.Core;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Compute;
+using Azure.ResourceManager.Network;
+using Azure.ResourceManager.Storage;
+using Azure.ResourceManager.Compute.Models;
+using Azure.ResourceManager.Storage.Models;
 using Microsoft.Azure.Cosmos;
+using SecurityAutomationFunction;
 
-public static class SecurityScanTrigger
+namespace SecurityAutomationFunction
 {
-    private static readonly string ConnectionString = Environment.GetEnvironmentVariable("CosmosDBConnection");
-    private static readonly CosmosClient CosmosClient = new CosmosClient(ConnectionString);
-    private static readonly Container Container = CosmosClient.GetContainer("SecurityScans", "ScanResults");
-
-    [FunctionName("SecurityScanTrigger")]
-    public static async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
-        ILogger log)
+    public static class SecurityScanTrigger
     {
-        log.LogInformation($"Security scan triggered at: {DateTime.UtcNow}");
+        private static readonly string EndpointUri = Environment.GetEnvironmentVariable("CosmosDBEndpointUrl");
+        private static readonly string PrimaryKey = Environment.GetEnvironmentVariable("CosmosDBPrimaryKey");
+        private static CosmosClient cosmosClient = new CosmosClient(EndpointUri, PrimaryKey);
 
-        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-        dynamic data = JsonConvert.DeserializeObject(requestBody);
-
-        string resourceToScan = data?.resourceToScan;
-        string scanType = data?.scanType;
-
-        if (string.IsNullOrEmpty(resourceToScan) || string.IsNullOrEmpty(scanType))
+        [FunctionName("SecurityScanTrigger")]
+        public static async Task<IActionResult> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+            ILogger log)
         {
-            log.LogWarning("Invalid request: Missing required parameters");
-            return new BadRequestObjectResult("Please provide resourceToScan and scanType in the request body");
-        }
+            log.LogInformation("C# HTTP trigger function processed a request.");
 
-        log.LogInformation($"Initiating {scanType} scan for resource: {resourceToScan}");
+            string resourceId = req.Query["resourceId"];
+            string scanType = req.Query["scanType"];
 
-        try
-        {
-            var scanResults = await PerformSecurityScan(resourceToScan, scanType);
-            
-            // Store results in Cosmos DB using SDK
+            if (string.IsNullOrEmpty(resourceId))
+            {
+                return new BadRequestObjectResult("Please pass a resourceId on the query string.");
+            }
+
             try
             {
-                var response = await Container.CreateItemAsync(new
-                {
-                    id = Guid.NewGuid().ToString(),
-                    timestamp = DateTime.UtcNow,
-                    resourceScanned = resourceToScan,
-                    scanType = scanType,
-                    results = scanResults
-                });
-                log.LogInformation($"Item created in Cosmos DB. Request charge: {response.RequestCharge}");
+                var credential = new DefaultAzureCredential();
+                var armClient = new ArmClient(credential);
+
+                var resourceIdentifier = new ResourceIdentifier(resourceId);
+                var scanResult = await ScanResourceAsync(armClient, resourceIdentifier, scanType, log);
+
+                // Store the scan result in Cosmos DB
+                await StoreScanResultAsync(scanResult);
+
+                return new OkObjectResult(scanResult);
             }
-            catch (CosmosException ex)
+            catch (Exception ex)
             {
-                log.LogError($"Cosmos DB Error: {ex.StatusCode}, {ex.Message}");
+                log.LogError($"Error scanning resource: {ex.Message}");
                 return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
-
-            return new OkObjectResult(scanResults);
         }
-        catch (Exception ex)
+
+        private static async Task<ScanResult> ScanResourceAsync(ArmClient armClient, ResourceIdentifier resourceIdentifier, string scanType, ILogger log)
         {
-            log.LogError($"An error occurred during the security scan for {resourceToScan}: {ex.Message}");
-            return new StatusCodeResult(StatusCodes.Status500InternalServerError);
+            switch (resourceIdentifier.ResourceType.ToString())
+            {
+                case "Microsoft.Compute/virtualMachines":
+                    return await ScanVirtualMachineAsync(armClient, resourceIdentifier, scanType, log);
+                case "Microsoft.Storage/storageAccounts":
+                    return await ScanStorageAccountAsync(armClient, resourceIdentifier, scanType, log);
+                default:
+                    throw new NotSupportedException($"Scanning for resource type {resourceIdentifier.ResourceType} is not supported.");
+            }
+        }
+
+        private static async Task<ScanResult> ScanVirtualMachineAsync(ArmClient armClient, ResourceIdentifier resourceIdentifier, string scanType, ILogger log)
+        {
+            var virtualMachine = armClient.GetVirtualMachineResource(resourceIdentifier);
+            var vmData = await virtualMachine.GetAsync();
+
+            var findings = new List<Finding>();
+
+            // Check for managed disks
+            if (vmData.Value.Data.StorageProfile.OsDisk.ManagedDisk == null)
+            {
+                findings.Add(new Finding("High", "VM is not using managed disks", "Convert to managed disks for improved security and management"));
+            }
+
+            // Check OS version
+            if (vmData.Value.Data.StorageProfile.ImageReference != null &&
+                vmData.Value.Data.StorageProfile.ImageReference.Offer == "WindowsServer" &&
+                vmData.Value.Data.StorageProfile.ImageReference.Sku != "2019-Datacenter")
+            {
+                findings.Add(new Finding("Medium", "VM is not using the latest OS version", "Update to the latest OS version to ensure all security patches are applied"));
+            }
+
+            return new ScanResult
+            {
+                ResourceId = virtualMachine.Id.ToString(),
+                ScanType = scanType,
+                Timestamp = DateTime.UtcNow,
+                Findings = findings
+            };
+        }
+
+        private static async Task<ScanResult> ScanStorageAccountAsync(ArmClient armClient, ResourceIdentifier resourceIdentifier, string scanType, ILogger log)
+        {
+            var storageAccount = armClient.GetStorageAccountResource(resourceIdentifier);
+            var storageData = await storageAccount.GetAsync();
+
+            var findings = new List<Finding>();
+
+            // Check for public access
+            if (storageData.Value.Data.PublicNetworkAccess == PublicNetworkAccess.Enabled)
+            {
+                findings.Add(new Finding("High", "Storage account allows public access", "Consider disabling public access and use private endpoints"));
+            }
+
+            // Check for encryption
+            if (storageData.Value.Data.Encryption.KeySource == StorageAccountKeySource.Microsoft)
+            {
+                findings.Add(new Finding("Medium", "Storage account is using Microsoft-managed keys", "Consider using customer-managed keys for added security"));
+            }
+
+            return new ScanResult
+            {
+                ResourceId = storageAccount.Id.ToString(),
+                ScanType = scanType,
+                Timestamp = DateTime.UtcNow,
+                Findings = findings
+            };
+        }
+
+        private static async Task StoreScanResultAsync(ScanResult scanResult)
+        {
+            var database = cosmosClient.GetDatabase("SecurityScans");
+            var container = database.GetContainer("ScanResults");
+
+            await container.CreateItemAsync(scanResult, new PartitionKey(scanResult.ResourceId));
         }
     }
 
-    private static async Task<object> PerformSecurityScan(string resourceId, string scanType)
+    public class ScanResult
     {
-        // Simulate an asynchronous operation
-        await Task.Delay(1000);
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string ResourceId { get; set; }
+        public string ScanType { get; set; }
+        public DateTime Timestamp { get; set; }
+        public List<Finding> Findings { get; set; }
+    }
 
-        var vulnerabilities = new List<object>();
-        var recommendations = new List<string>();
+    public class Finding
+    {
+        public string Severity { get; set; }
+        public string Description { get; set; }
+        public string Recommendation { get; set; }
 
-        switch (scanType.ToLower())
+        public Finding(string severity, string description, string recommendation)
         {
-            case "vulnerabilityassessment":
-                SimulateVulnerabilityAssessment(resourceId, vulnerabilities, recommendations);
-                break;
-            case "compliancecheck":
-                SimulateComplianceCheck(resourceId, vulnerabilities, recommendations);
-                break;
-            case "configurationaudit":
-                SimulateConfigurationAudit(resourceId, vulnerabilities, recommendations);
-                break;
-            default:
-                throw new ArgumentException($"Invalid scan type: {scanType}");
+            Severity = severity;
+            Description = description;
+            Recommendation = recommendation;
         }
-
-        return new
-        {
-            Timestamp = DateTime.UtcNow,
-            ScannedResource = resourceId,
-            ScanType = scanType,
-            Vulnerabilities = vulnerabilities,
-            Recommendations = recommendations
-        };
-    }
-
-    private static void SimulateVulnerabilityAssessment(string resourceId, List<object> vulnerabilities, List<string> recommendations)
-    {
-        if (resourceId == "secure-webapp-002")
-        {
-            // No vulnerabilities for this specific resource
-            recommendations.Add("No vulnerabilities found. Continue maintaining security best practices.");
-            return;
-        }
-
-        vulnerabilities.Add(new { Description = "Potential SQL Injection vulnerability", Severity = "High", ResourceId = resourceId });
-        vulnerabilities.Add(new { Description = "Outdated SSL/TLS version", Severity = "Medium", ResourceId = resourceId });
-        recommendations.Add("Implement input validation and use parameterized queries");
-        recommendations.Add("Upgrade to the latest SSL/TLS version");
-    }
-
-    private static void SimulateComplianceCheck(string resourceId, List<object> vulnerabilities, List<string> recommendations)
-    {
-        vulnerabilities.Add(new { Description = "Non-compliance with data retention policy", Severity = "Medium", ResourceId = resourceId });
-        vulnerabilities.Add(new { Description = "Lack of encryption for data at rest", Severity = "High", ResourceId = resourceId });
-        recommendations.Add("Implement data lifecycle management policy");
-        recommendations.Add("Enable encryption for all data storage solutions");
-    }
-
-    private static void SimulateConfigurationAudit(string resourceId, List<object> vulnerabilities, List<string> recommendations)
-    {
-        vulnerabilities.Add(new { Description = "Excessive permissions in IAM roles", Severity = "High", ResourceId = resourceId });
-        vulnerabilities.Add(new { Description = "Default network security group rules", Severity = "Medium", ResourceId = resourceId });
-        recommendations.Add("Review and adjust IAM roles to follow least privilege principle");
-        recommendations.Add("Customize network security group rules based on application requirements");
     }
 }
