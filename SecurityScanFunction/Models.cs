@@ -6,7 +6,7 @@ namespace SecurityScanFunction
 {
     public class ScanResult
     {
-        [JsonProperty(PropertyName = "id")]
+        [JsonProperty("id")]
         public string Id { get; set; }
         public string ResourceId { get; set; }
         public string ResourceName { get; set; }

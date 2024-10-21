@@ -1,22 +1,33 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Linq;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Azure.Identity;
-using Microsoft.Azure.Management.CosmosDB;
-using Microsoft.Azure.Management.CosmosDB.Models;
-using Microsoft.Rest;
+using Azure.ResourceManager;
+using Azure.ResourceManager.CosmosDB;
+using Azure.Core;
+using Microsoft.Azure.Cosmos;
 
 namespace SecurityScanFunction
 {
-    public static class SecurityScanTrigger
+    public class SecurityScanTrigger
     {
+        private readonly CosmosDBSecurityScanner _scanner;
+        private readonly ScanResultStore _store;
+
+        public SecurityScanTrigger(CosmosDBSecurityScanner scanner, ScanResultStore store)
+        {
+            _scanner = scanner;
+            _store = store;
+        }
+
         [FunctionName("SecurityScanTrigger")]
-        public static async Task<IActionResult> Run(
+        public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
             ILogger log)
         {
@@ -29,86 +40,59 @@ namespace SecurityScanFunction
                 return new BadRequestObjectResult("Please pass a resourceId on the query string.");
             }
 
-            var findings = new List<Finding>();
-
             try
             {
                 var credential = new DefaultAzureCredential();
-                var token = await credential.GetTokenAsync(new Azure.Core.TokenRequestContext(new[] { "https://management.azure.com/.default" }));
-                var tokenCredentials = new TokenCredentials(token.Token);
+                var armClient = new ArmClient(credential);
+                var cosmosDBAccountResource = armClient.GetCosmosDBAccountResource(new ResourceIdentifier(resourceId));
 
-                var cosmosDbManagementClient = new CosmosDBManagementClient(tokenCredentials);
-                cosmosDbManagementClient.SubscriptionId = ExtractSubscriptionId(resourceId);
-
-                var accountName = ExtractAccountName(resourceId);
-                var resourceGroupName = ExtractResourceGroupName(resourceId);
-
-                var account = await cosmosDbManagementClient.DatabaseAccounts.GetAsync(resourceGroupName, accountName);
-
-                // Check for public network access
-                if (account.PublicNetworkAccess == "Enabled")
+                // Get the Cosmos DB account data
+                var accountResponse = await cosmosDBAccountResource.GetAsync();
+                if (!accountResponse.HasValue)
                 {
-                    findings.Add(new Finding { Severity = "High", Description = "Cosmos DB account allows public access", Recommendation = "Consider disabling public access and use private endpoints" });
+                    return new NotFoundResult();
                 }
 
-                // Check for encryption at rest (customer-managed keys)
-                if (string.IsNullOrEmpty(account.KeyVaultKeyUri))
-                {
-                    findings.Add(new Finding { Severity = "High", Description = "Cosmos DB account is not using customer-managed keys for encryption", Recommendation = "Enable customer-managed keys for enhanced security" });
-                }
+                var scanResult = await _scanner.ScanCosmosDBAccount(accountResponse.Value, log);
+                await _store.StoreScanResult(scanResult);
 
-                // Check for firewall rules
-                if (account.IpRules == null || account.IpRules.Count == 0)
-                {
-                    findings.Add(new Finding { Severity = "Medium", Description = "No IP firewall rules configured", Recommendation = "Configure IP firewall rules to restrict access" });
-                }
+                var severityCounts = scanResult.Findings
+                    .GroupBy(f => f.Severity)
+                    .ToDictionary(g => g.Key, g => g.Count());
 
-                // Check for automatic failover
-                if (!account.EnableAutomaticFailover.GetValueOrDefault())
+                var response = new
                 {
-                    findings.Add(new Finding { Severity = "Low", Description = "Automatic failover is not enabled", Recommendation = "Enable automatic failover for improved availability" });
-                }
-
-                // Check for multi-region writes
-                if (!account.EnableMultipleWriteLocations.GetValueOrDefault())
-                {
-                    findings.Add(new Finding { Severity = "Low", Description = "Multi-region writes are not enabled", Recommendation = "Consider enabling multi-region writes for improved performance and availability" });
-                }
-
-                var scanResult = new ScanResult
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    ResourceId = resourceId,
-                    ResourceName = account.Name,
-                    ScanTime = DateTime.UtcNow,
-                    Findings = findings
+                    scanResult.Id,
+                    scanResult.ResourceId,
+                    scanResult.ResourceName,
+                    scanResult.ScanTime,
+                    SeverityCounts = severityCounts,
+                    scanResult.Findings
                 };
 
-                return new OkObjectResult(scanResult);
+                log.LogInformation($"Scan completed successfully for resourceId: {resourceId}");
+                return new OkObjectResult(response);
+            }
+            catch (Azure.Identity.AuthenticationFailedException authEx)
+            {
+                log.LogError(authEx, "Authentication failed");
+                return new UnauthorizedResult();
+            }
+            catch (Azure.RequestFailedException reqEx)
+            {
+                log.LogError(reqEx, "Azure request failed");
+                return new StatusCodeResult(StatusCodes.Status500InternalServerError);
+            }
+            catch (CosmosException cosmosEx)
+            {
+                log.LogError(cosmosEx, "Cosmos DB operation failed");
+                return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
             catch (Exception ex)
             {
-                log.LogError($"Error: {ex.Message}");
+                log.LogError(ex, "An unexpected error occurred.");
                 return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
-        }
-
-        private static string ExtractSubscriptionId(string resourceId)
-        {
-            var parts = resourceId.Split('/');
-            return parts.Length > 2 ? parts[2] : string.Empty;
-        }
-
-        private static string ExtractResourceGroupName(string resourceId)
-        {
-            var parts = resourceId.Split('/');
-            return parts.Length > 4 ? parts[4] : string.Empty;
-        }
-
-        private static string ExtractAccountName(string resourceId)
-        {
-            var parts = resourceId.Split('/');
-            return parts.Length > 8 ? parts[8] : string.Empty;
         }
     }
 }
