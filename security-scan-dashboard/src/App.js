@@ -6,8 +6,8 @@ import Dashboard from './components/Dashboard';
 const msalConfig = {
   auth: {
     clientId: "your-client-id",
-    authority: "https://login.microsoftonline.com/your-tenant-id",
-    redirectUri: "http://localhost:3000"
+    authority: `https://login.microsoftonline.com/${process.env.REACT_APP_TENANT_ID}`,
+    redirectUri: window.location.origin
   }
 };
 
