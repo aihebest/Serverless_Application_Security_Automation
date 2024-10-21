@@ -5,8 +5,11 @@ using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
+using System.Security.Claims;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.CosmosDB;
@@ -29,8 +32,14 @@ namespace SecurityScanFunction
         [FunctionName("SecurityScanTrigger")]
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
-            ILogger log)
+            ILogger log,
+            ClaimsPrincipal claimsPrincipal)
         {
+            if (!claimsPrincipal.Identity.IsAuthenticated)
+            {
+                return new UnauthorizedResult();
+            }
+
             log.LogInformation("C# HTTP trigger function processed a request.");
 
             string resourceId = req.Query["resourceId"];
@@ -92,6 +101,22 @@ namespace SecurityScanFunction
             {
                 log.LogError(ex, "An unexpected error occurred.");
                 return new StatusCodeResult(StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        public class GetScanResults
+        {
+            [FunctionName("GetScanResults")]
+            public async Task<IActionResult> Run(
+                [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
+                ILogger log,
+                ClaimsPrincipal claimsPrincipal)
+            {
+                if (!claimsPrincipal.Identity.IsAuthenticated)
+                {
+                    return new UnauthorizedResult();
+                }
+                // Logic to fetch and return scan results...
             }
         }
     }
