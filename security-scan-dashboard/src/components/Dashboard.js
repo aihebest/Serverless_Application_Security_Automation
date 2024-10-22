@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMsal } from "@azure/msal-react";
 import { Button, DataGrid, DataGridBody, DataGridRow, DataGridCell } from '@fluentui/react-components';
 import axios from 'axios';
@@ -8,7 +8,8 @@ const Dashboard = () => {
   const [scanResults, setScanResults] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchScanResults = async () => {
+  // Move fetchScanResults to useCallback to memoize it
+  const fetchScanResults = useCallback(async () => {
     setLoading(true);
     try {
       const token = await instance.acquireTokenSilent({
@@ -24,15 +25,12 @@ const Dashboard = () => {
       console.error('Error fetching scan results:', error);
     }
     setLoading(false);
-  };
+  }, [instance, accounts]); // Add dependencies for useCallback
 
+  // Now use fetchScanResults in useEffect
   useEffect(() => {
-    // Moved fetchScanResults inside useEffect to avoid the dependency issue
-    const getScanResults = async () => {
-      await fetchScanResults();
-    };
-    getScanResults();
-  }, []); // Empty dependency array since we only want to run this once
+    fetchScanResults();
+  }, [fetchScanResults]); // Add fetchScanResults as a dependency
 
   const triggerScan = async () => {
     try {
