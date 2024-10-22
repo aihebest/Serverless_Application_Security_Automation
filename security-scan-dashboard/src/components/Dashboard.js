@@ -8,10 +8,6 @@ const Dashboard = () => {
   const [scanResults, setScanResults] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchScanResults();
-  }, []);
-
   const fetchScanResults = async () => {
     setLoading(true);
     try {
@@ -29,6 +25,14 @@ const Dashboard = () => {
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    // Moved fetchScanResults inside useEffect to avoid the dependency issue
+    const getScanResults = async () => {
+      await fetchScanResults();
+    };
+    getScanResults();
+  }, []); // Empty dependency array since we only want to run this once
 
   const triggerScan = async () => {
     try {
@@ -63,9 +67,9 @@ const Dashboard = () => {
                 <DataGridCell>{result.id}</DataGridCell>
                 <DataGridCell>{result.resourceName}</DataGridCell>
                 <DataGridCell>{result.scanTime}</DataGridCell>
-                <DataGridCell>{result.severityCounts.High}</DataGridCell>
-                <DataGridCell>{result.severityCounts.Medium}</DataGridCell>
-                <DataGridCell>{result.severityCounts.Low}</DataGridCell>
+                <DataGridCell>{result.severityCounts?.High || 0}</DataGridCell>
+                <DataGridCell>{result.severityCounts?.Medium || 0}</DataGridCell>
+                <DataGridCell>{result.severityCounts?.Low || 0}</DataGridCell>
               </DataGridRow>
             ))}
           </DataGridBody>
