@@ -8,12 +8,71 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - master
+  schedule:
+    - cron: '0 0 * * *'  # Daily security scan
 
 jobs:
+  security_scan:
+    runs-on: ubuntu-latest
+    name: Security Scanning
+    steps:
+      - uses: actions/checkout@v3
+
+      # CodeQL Analysis
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+
+      - name: Run npm audit
+        run: |
+          cd security-scan-dashboard
+          npm audit
+
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'Security Scanner'
+          path: '.'
+          format: 'HTML'
+          
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      # SonarCloud Scan
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # Security Report Generation
+      - name: Generate Security Report
+        if: always()
+        run: |
+          echo "# Security Scan Results" > security-report.md
+          echo "## NPM Audit" >> security-report.md
+          npm audit --json | jq . >> security-report.md
+          echo "## Dependency Check" >> security-report.md
+          cat dependency-check-report.html >> security-report.md
+
+      - name: Upload Security Report
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: security-report
+          path: security-report.md
+
   build_and_deploy_job:
+    needs: security_scan
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+
     steps:
       - uses: actions/checkout@v3
         with:

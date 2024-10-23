@@ -4,7 +4,7 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using SecurityScanFunction.Services.SecurityChecks;
 
-namespace SecurityScanFunction
+namespace SecurityScanFunction.Services.Triggers
 {
     public class AutomatedScanTimerTrigger
     {
@@ -19,14 +19,13 @@ namespace SecurityScanFunction
             _logger = logger;
         }
 
-        [FunctionName("AutomatedScanTimerTrigger")]
+        [FunctionName("AutomatedScanTimer")]
         public async Task Run([TimerTrigger("0 0 * * * *")] TimerInfo myTimer)
         {
             _logger.LogInformation($"Security scan timer trigger executed at: {DateTime.Now}");
 
             try
             {
-                // For demo purposes, scan a fixed resource
                 var resourceId = Environment.GetEnvironmentVariable("DefaultResourceId");
                 var resourceName = Environment.GetEnvironmentVariable("DefaultResourceName");
 

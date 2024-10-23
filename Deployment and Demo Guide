@@ -1,0 +1,116 @@
+# Deployment and Demo Guide
+
+## Prerequisites
+- Azure Account with required permissions
+- GitHub Account
+- Node.js 18.x
+- .NET 6.0 SDK
+
+## Step 1: Azure Resources Setup
+```bash
+# Login to Azure
+az login
+
+# Create Resource Group
+az group create --name security-scan-rg --location eastus
+
+# Create Azure Function App
+az functionapp create \
+    --name your-security-scan-function \
+    --resource-group security-scan-rg \
+    --consumption-plan-location eastus \
+    --runtime dotnet \
+    --functions-version 4
+
+# Create Cosmos DB Account
+az cosmosdb create \
+    --name your-security-scan-db \
+    --resource-group security-scan-rg \
+    --kind GlobalDocumentDB
+
+# Create Static Web App
+az staticwebapp create \
+    --name security-scan-dashboard \
+    --resource-group security-scan-rg \
+    --location eastus
+```
+
+## Step 2: Configure Authentication
+```bash
+# Create Azure AD App Registration
+az ad app create \
+    --display-name "Security Scan App" \
+    --spa-redirect-uris "http://localhost:3000" \
+    --enable-id-token-issuance
+
+# Note down the client ID and tenant ID
+```
+
+## Step 3: GitHub Actions Setup
+1. Add these secrets to your GitHub repository:
+   - AZURE_STATIC_WEB_APPS_API_TOKEN
+   - AZURE_AD_CLIENT_ID
+   - AZURE_AD_TENANT_ID
+   - SONAR_TOKEN
+   - SNYK_TOKEN
+
+2. Update workflow file paths if needed
+
+## Step 4: Local Development Setup
+```bash
+# Clone repository
+git clone https://github.com/yourusername/security-automation-platform
+
+# Install dashboard dependencies
+cd security-scan-dashboard
+npm install
+
+# Start local development
+npm start
+
+# Deploy Azure Function
+cd ../SecurityScanFunction
+func azure functionapp publish your-security-scan-function
+```
+
+## Step 5: Demo Setup
+For showcasing the project:
+
+1. **Prepare Demo Data:**
+```sql
+-- Add sample data to Cosmos DB
+{
+  "id": "scan-001",
+  "resourceName": "demo-cosmos-db",
+  "scanTime": "2024-01-01T00:00:00Z",
+  "severityCounts": {
+    "High": 2,
+    "Medium": 3,
+    "Low": 5
+  }
+}
+```
+
+2. **Demo Script:**
+- Show security dashboard
+- Trigger manual scan
+- Demonstrate compliance monitoring
+- Show security score trending
+- Display real-time updates
+
+## Common Issues and Solutions
+
+1. **Authentication Issues:**
+   - Verify Azure AD app registration
+   - Check CORS settings
+   - Confirm redirect URIs
+
+2. **Deployment Issues:**
+   - Verify GitHub secrets
+   - Check Azure credentials
+   - Validate function app settings
+
+3. **Monitoring Issues:**
+   - Verify Application Insights connection
+   - Check logging configuration
+   - Validate metrics collection

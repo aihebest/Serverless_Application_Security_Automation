@@ -1,0 +1,62 @@
+# Project Showcase Guide
+
+## Key Points to Highlight
+
+### 1. DevSecOps Implementation
+- Show automated security scanning
+- Demonstrate CI/CD security gates
+- Display security metrics dashboard
+
+### 2. Technical Architecture
+- Explain serverless architecture
+- Show security monitoring implementation
+- Demonstrate authentication flow
+
+### 3. Security Features
+- Display real-time security scoring
+- Show compliance monitoring
+- Demonstrate automated scanning
+
+### 4. Code Quality
+- Show SonarCloud integration
+- Display security scanning results
+- Demonstrate automated testing
+
+## Demo Flow
+
+1. **Start with Dashboard**
+   - Show security score
+   - Display compliance status
+   - Demonstrate real-time updates
+
+2. **Security Scanning**
+   - Trigger manual scan
+   - Show automated scanning
+   - Display results processing
+
+3. **Monitoring**
+   - Show metrics collection
+   - Display security trends
+   - Demonstrate alerting
+
+4. **DevOps Pipeline**
+   - Show GitHub Actions workflow
+   - Display security gates
+   - Demonstrate automated deployment
+
+## Discussion Points
+
+### Security Implementation
+- Azure AD integration
+- RBAC implementation
+- Secure communication
+
+### Cloud Architecture
+- Serverless benefits
+- Scaling capabilities
+- Cost optimization
+
+### Best Practices
+- Security-first approach
+- Continuous monitoring
+- Automated remediation

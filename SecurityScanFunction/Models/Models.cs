@@ -11,7 +11,7 @@ namespace SecurityScanFunction
         public string ResourceId { get; set; }
         public string ResourceName { get; set; }
         public DateTime ScanTime { get; set; }
-        public List<Finding> Findings { get; set; }
+        public List<Finding> Findings { get; set; } = new List<Finding>();
     }
 
     public class Finding
