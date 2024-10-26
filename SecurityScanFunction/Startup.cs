@@ -2,10 +2,9 @@ using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using System;
-using Microsoft.Azure.Cosmos;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Logging;
 using SecurityScanFunction.Services;
+using SecurityScanFunction.Interfaces;
+using Microsoft.Azure.Cosmos;
 
 [assembly: FunctionsStartup(typeof(SecurityScanFunction.Startup))]
 
@@ -15,45 +14,74 @@ namespace SecurityScanFunction
     {
         public override void Configure(IFunctionsHostBuilder builder)
         {
-            // Add Cosmos DB client
+            // Add CosmosClient
             builder.Services.AddSingleton(s => 
             {
                 var connectionString = Environment.GetEnvironmentVariable("CosmosDBConnectionString");
-                if (string.IsNullOrEmpty(connectionString))
-                {
-                    throw new InvalidOperationException("CosmosDBConnectionString is required");
-                }
                 return new CosmosClient(connectionString);
             });
 
-            // Add logging
+            // Add Security Services
+            builder.Services.AddScoped<ICosmosOperations, SecurityScanner>();
+            builder.Services.AddScoped<SecurityScanner>();
+            
+            // Add Storage Services
+            builder.Services.AddSingleton(s => 
+            {
+                var connectionString = Environment.GetEnvironmentVariable("CosmosDBConnectionString");
+                return new ScanResultStore(connectionString);
+            });
+            
+            // Add Report Services
+            builder.Services.AddSingleton(s => 
+            {
+                var connectionString = Environment.GetEnvironmentVariable("CosmosDBConnectionString");
+                return new ReportGenerator(connectionString);
+            });
+
+            // Add Logger Configuration
             builder.Services.AddLogging();
 
-            // Add security scanner
-            builder.Services.AddSingleton<SecurityScanner>();
-            builder.Services.AddSingleton<ScanResultStore>();
+            // Add CORS policy
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowStaticWebApp",
+                    builder => builder.WithOrigins(Environment.GetEnvironmentVariable("CORS"))
+                                    .AllowAnyMethod()
+                                    .AllowAnyHeader());
+            });
 
             // Add authentication
-            builder.Services.AddAuthentication(options =>
+            builder.Services.AddAuthentication(sharedOptions =>
             {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                sharedOptions.DefaultScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
             })
             .AddJwtBearer(options =>
             {
-                options.Authority = $"https://login.microsoftonline.com/{Environment.GetEnvironmentVariable("TENANT_ID")}/v2.0";
                 options.Audience = Environment.GetEnvironmentVariable("AUTH_AUDIENCE");
+                options.Authority = $"https://login.microsoftonline.com/{Environment.GetEnvironmentVariable("TENANT_ID")}/v2.0";
             });
 
-            // Add CORS
-            builder.Services.AddCors(options =>
+            // Add Configuration
+            var config = new ConfigurationBuilder()
+                .SetBasePath(Environment.CurrentDirectory)
+                .AddJsonFile("local.settings.json", optional: true, reloadOnChange: true)
+                .AddEnvironmentVariables()
+                .Build();
+            builder.Services.AddSingleton<IConfiguration>(config);
+        }
+
+        private static CosmosClient InitializeCosmosClientInstance(string connectionString)
+        {
+            var clientOptions = new CosmosClientOptions
             {
-                options.AddPolicy("AllowAll",
-                    builder => builder
-                        .AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader());
-            });
+                SerializerOptions = new CosmosSerializationOptions
+                {
+                    PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
+                }
+            };
+
+            return new CosmosClient(connectionString, clientOptions);
         }
     }
 }

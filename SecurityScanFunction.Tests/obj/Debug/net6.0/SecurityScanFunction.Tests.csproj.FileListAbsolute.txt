@@ -1,0 +1,6 @@
+C:\Users\admin\OneDrive - Desicon Group\Documents\DevSecOps-Project\Serverless Application\SecurityScanFunction.Tests\obj\Debug\net6.0\SecurityScanFunction.Tests.csproj.AssemblyReference.cache
+C:\Users\admin\OneDrive - Desicon Group\Documents\DevSecOps-Project\Serverless Application\SecurityScanFunction.Tests\obj\Debug\net6.0\SecurityScanFunction.Tests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\admin\OneDrive - Desicon Group\Documents\DevSecOps-Project\Serverless Application\SecurityScanFunction.Tests\obj\Debug\net6.0\SecurityScanFunction.Tests.AssemblyInfoInputs.cache
+C:\Users\admin\OneDrive - Desicon Group\Documents\DevSecOps-Project\Serverless Application\SecurityScanFunction.Tests\obj\Debug\net6.0\SecurityScanFunction.Tests.AssemblyInfo.cs
+C:\Users\admin\OneDrive - Desicon Group\Documents\DevSecOps-Project\Serverless Application\SecurityScanFunction.Tests\obj\Debug\net6.0\SecurityScanFunction.Tests.csproj.CoreCompileInputs.cache
+C:\Users\admin\OneDrive - Desicon Group\Documents\DevSecOps-Project\Serverless Application\SecurityScanFunction.Tests\obj\Debug\net6.0\SecurityScanFunction.Tests.sourcelink.json
