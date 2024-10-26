@@ -62,10 +62,11 @@ jobs:
 
       - name: Upload Security Report
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3  # Updated from v2 to v3
         with:
           name: security-report
           path: security-report.md
+          retention-days: 90
 
   build_and_deploy_job:
     needs: security_scan
@@ -77,6 +78,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
+          fetch-depth: 0  # Added for better version control integration
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -88,7 +90,7 @@ jobs:
       - name: Install Dependencies
         run: |
           cd security-scan-dashboard
-          npm install
+          npm ci  # Changed from npm install to npm ci for cleaner installs
           npm install axios @azure/msal-react @azure/msal-browser @fluentui/react-components --save
           npm list axios
 
