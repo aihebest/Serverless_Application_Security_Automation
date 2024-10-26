@@ -8,9 +8,4 @@
       }
     }
   }
-  // Remove or comment out the "extensionBundle" section if it exists
-  // "extensionBundle": {
-  //   "id": "Microsoft.Azure.Functions.ExtensionBundle",
-  //   "version": "[2.*, 3.0.0)"
-  // }
 }

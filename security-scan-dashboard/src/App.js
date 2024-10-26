@@ -1,16 +1,21 @@
+// src/App.js
 import React from 'react';
-import SecurityDashboard from './components/security/SecurityDashboard';
+import { BrowserRouter } from 'react-router-dom';
+import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import AuthProvider from './components/auth/AuthProvider';
-import ProtectedRoute from './components/auth/ProtectedRoute';
+// Fix the import path
+import Dashboard from './components/security/Dashboard';
 
 function App() {
-    return (
+  return (
+    <FluentProvider theme={webLightTheme}>
+      <BrowserRouter>
         <AuthProvider>
-            <ProtectedRoute>
-                <SecurityDashboard />
-            </ProtectedRoute>
+          <Dashboard />
         </AuthProvider>
-    );
+      </BrowserRouter>
+    </FluentProvider>
+  );
 }
 
 export default App;

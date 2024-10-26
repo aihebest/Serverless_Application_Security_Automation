@@ -1,56 +1,94 @@
+// src/services/securityApi.js
 import axios from 'axios';
-import { msalInstance } from '../config/authConfig';
+import { authTokenManager } from './authTokenManager';
+import { withRetry, RetryConfig, createApiErrorHandler } from '../utils/apiUtils';
+import { trackEvent, trackException } from './telemetryService';
 
 class SecurityApiService {
-    constructor() {
-        this.api = axios.create({
-            baseURL: process.env.REACT_APP_API_BASE_URL,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+  constructor() {
+    this.baseURL = process.env.REACT_APP_API_BASE_URL;
+    this.retryConfig = new RetryConfig(3, 1000, 5000);
+    
+    this.api = axios.create({
+      baseURL: this.baseURL,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
 
-        // Add request interceptor for auth token
-        this.api.interceptors.request.use(async (config) => {
-            const account = msalInstance.getAllAccounts()[0];
-            const token = await msalInstance.acquireTokenSilent({
-                scopes: ['User.Read'],
-                account: account
-            });
-            config.headers.Authorization = `Bearer ${token.accessToken}`;
-            return config;
-        });
-    }
+    this.setupInterceptors();
+  }
 
-    async getScanResults() {
-        try {
-            const response = await this.api.get('/GetScanResults');
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching scan results:', error);
-            throw error;
+  setupInterceptors() {
+    this.api.interceptors.request.use(
+      async (config) => {
+        const token = await authTokenManager.getAccessToken();
+        config.headers.Authorization = `Bearer ${token}`;
+        trackEvent('ApiRequest', { endpoint: config.url });
+        return config;
+      },
+      error => {
+        trackException(error, 'RequestInterceptor');
+        return Promise.reject(error);
+      }
+    );
+
+    this.api.interceptors.response.use(
+      response => {
+        trackEvent('ApiSuccess', { endpoint: response.config.url });
+        return response;
+      },
+      async error => {
+        if (error.response?.status === 401) {
+          try {
+            // Try to get a new token
+            const token = await authTokenManager.getAccessToken(true);
+            error.config.headers.Authorization = `Bearer ${token}`;
+            return this.api.request(error.config);
+          } catch (refreshError) {
+            return Promise.reject(refreshError);
+          }
         }
-    }
+        return Promise.reject(error);
+      }
+    );
+  }
 
-    async getSecurityMetrics() {
-        try {
-            const response = await this.api.get('/GetSecurityMetrics');
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching security metrics:', error);
-            throw error;
-        }
-    }
+  async getSecurityMetrics() {
+    return withRetry(
+      async () => {
+        const response = await this.api.get('/api/security/metrics');
+        return response.data;
+      },
+      this.retryConfig
+    ).catch(createApiErrorHandler({ context: 'getSecurityMetrics' }));
+  }
 
-    async triggerScan() {
-        try {
-            const response = await this.api.post('/TriggerScan');
-            return response.data;
-        } catch (error) {
-            console.error('Error triggering scan:', error);
-            throw error;
-        }
-    }
+  async getScanResults(scanId = null) {
+    return withRetry(
+      async () => {
+        const endpoint = scanId 
+          ? `/api/security/scan-results/${scanId}`
+          : '/api/security/scan-results';
+        const response = await this.api.get(endpoint);
+        return response.data;
+      },
+      this.retryConfig
+    ).catch(createApiErrorHandler({ context: 'getScanResults', scanId }));
+  }
+
+  async triggerScan() {
+    return withRetry(
+      async () => {
+        const response = await this.api.post('/api/security/scan');
+        return response.data;
+      },
+      this.retryConfig
+    ).catch(createApiErrorHandler({ context: 'triggerScan' }));
+  }
+
+  // ... rest of your existing methods with similar retry and error handling
 }
 
-export default new SecurityApiService();
+const securityApiService = new SecurityApiService();
+export default securityApiService;
