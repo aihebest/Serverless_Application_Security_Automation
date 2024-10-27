@@ -21,93 +21,75 @@ jobs:
         with:
           node-version: '18.20.4'
 
-      - name: Prepare Project
+      - name: Setup Project Dependencies
+        working-directory: ./security-scan-dashboard
         run: |
-          # Create security-scan-dashboard if it doesn't exist
-          mkdir -p security-scan-dashboard
-          cd security-scan-dashboard
+          # Clean install
+          rm -rf node_modules package-lock.json
           
-          # Create bare minimum package.json
+          # Create package.json with all required dependencies
           echo '{
             "name": "security-scan-dashboard",
             "version": "1.0.0",
             "private": true,
+            "dependencies": {
+              "@azure/msal-browser": "2.38.0",
+              "@azure/msal-react": "1.5.13",
+              "@fluentui/react-components": "9.30.0",
+              "react": "18.2.0",
+              "react-dom": "18.2.0",
+              "react-router-dom": "6.22.0",
+              "react-scripts": "5.0.1",
+              "ajv": "8.12.0",
+              "ajv-keywords": "5.1.0",
+              "schema-utils": "4.2.0"
+            },
+            "devDependencies": {
+              "@babel/core": "7.23.9",
+              "@babel/preset-react": "7.23.3",
+              "@babel/preset-env": "7.23.3",
+              "@babel/plugin-proposal-private-property-in-object": "7.21.11",
+              "@types/react": "18.2.0",
+              "@types/react-dom": "18.2.0",
+              "typescript": "4.9.5"
+            },
             "scripts": {
               "start": "react-scripts start",
               "build": "react-scripts build"
+            },
+            "eslintConfig": {
+              "extends": ["react-app"]
+            },
+            "browserslist": {
+              "production": [
+                ">0.2%",
+                "not dead",
+                "not op_mini all"
+              ],
+              "development": [
+                "last 1 chrome version",
+                "last 1 firefox version",
+                "last 1 safari version"
+              ]
             }
           }' > package.json
           
           # Create .npmrc
           echo "legacy-peer-deps=true
-          strict-peer-dependencies=false" > .npmrc
+          strict-peer-dependencies=false
+          auto-install-peers=true" > .npmrc
 
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
         run: |
-          # Remove existing node_modules and lock files
-          rm -rf node_modules package-lock.json
+          echo "Installing dependencies..."
+          npm install --legacy-peer-deps
           
-          # Install core dependencies first
-          npm install --save \
-            react@18.2.0 \
-            react-dom@18.2.0 \
-            react-scripts@5.0.1
+          echo "Installing additional dependencies..."
+          npm install --save ajv@8.12.0 ajv-keywords@5.1.0 schema-utils@4.2.0
           
-          # Install other dependencies
-          npm install --save \
-            @azure/msal-browser@2.38.0 \
-            @azure/msal-react@1.5.13 \
-            @fluentui/react-components@9.30.0 \
-            react-router-dom@6.22.0
-          
-          # Install dev dependencies
-          npm install --save-dev \
-            @babel/core@7.23.9 \
-            @babel/plugin-proposal-private-property-in-object@7.21.11
-
-      - name: Create React App Structure
-        working-directory: ./security-scan-dashboard
-        run: |
-          # Create src and public directories
-          mkdir -p src public
-          
-          # Create index.html
-          echo '<!DOCTYPE html>
-          <html lang="en">
-            <head>
-              <meta charset="utf-8">
-              <title>Security Dashboard</title>
-            </head>
-            <body>
-              <div id="root"></div>
-            </body>
-          </html>' > public/index.html
-          
-          # Create index.js
-          echo 'import React from "react";
-          import ReactDOM from "react-dom/client";
-          import App from "./App";
-          
-          const root = ReactDOM.createRoot(document.getElementById("root"));
-          root.render(
-            <React.StrictMode>
-              <App />
-            </React.StrictMode>
-          );' > src/index.js
-          
-          # Create App.js
-          echo 'import React from "react";
-          
-          function App() {
-            return (
-              <div>
-                <h1>Security Dashboard</h1>
-              </div>
-            );
-          }
-          
-          export default App;' > src/App.js
+          echo "Verifying installations..."
+          npm list ajv ajv-keywords schema-utils
 
       - name: Build And Deploy
         id: builddeploy
@@ -117,6 +99,7 @@ jobs:
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
           CI: false
+          GENERATE_SOURCEMAP: false
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -124,17 +107,17 @@ jobs:
           app_location: "security-scan-dashboard"
           api_location: "SecurityScanFunction"
           output_location: "build"
-          app_build_command: "CI=false npm run build"
+          app_build_command: |
+            npm install --legacy-peer-deps
+            CI=false GENERATE_SOURCEMAP=false npm run build
 
-      - name: Log Status
+      - name: Log Build Status
         if: always()
         working-directory: ./security-scan-dashboard
         run: |
-          echo "Node version:"
-          node -v
-          echo "NPM version:"
-          npm -v
-          echo "Directory contents:"
-          ls -la
-          echo "Installed packages:"
+          echo "Node version: $(node -v)"
+          echo "NPM version: $(npm -v)"
+          echo "Package versions:"
           npm list --depth=0
+          echo "Build directory contents:"
+          ls -la build || echo "Build directory not found"
