@@ -21,39 +21,65 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
 
-      - name: Debug Directory Structure
+      - name: Verify Directory Structure
         run: |
-          echo "Current directory:"
-          pwd
-          echo "Directory contents:"
+          echo "Current directory structure:"
           ls -la
-          echo "security-scan-dashboard contents:"
-          ls -la security-scan-dashboard || echo "Directory not found"
+          echo "Contents of github/workflows:"
+          ls -la .github/workflows || echo "Workflows directory not found"
+          echo "Contents of security-scan-dashboard:"
+          ls -la security-scan-dashboard || echo "Dashboard directory not found"
 
       - name: Install Dependencies
+        working-directory: ./security-scan-dashboard
         run: |
-          # Navigate to the project directory
-          cd security-scan-dashboard
+          echo "Installing project dependencies..."
           
-          # Debug project structure
-          echo "Project directory contents:"
-          ls -la
+          # Ensure we're in the correct directory
+          pwd
+          
+          # Create fresh package.json
+          cat > package.json << 'EOL'
+          ${{ toJSON({
+            "name": "security-scan-dashboard",
+            "version": "1.0.0",
+            "private": true,
+            "dependencies": {
+              "@azure/msal-browser": "2.38.0",
+              "@azure/msal-react": "1.5.9",
+              "@fluentui/react-components": "9.30.0",
+              "axios": "1.6.0",
+              "react": "18.2.0",
+              "react-dom": "18.2.0",
+              "react-scripts": "5.0.1"
+            },
+            "devDependencies": {
+              "@types/node": "16.18.0",
+              "@types/react": "18.2.0",
+              "@types/react-dom": "18.2.0",
+              "@typescript-eslint/eslint-plugin": "5.62.0",
+              "@typescript-eslint/parser": "5.62.0",
+              "eslint": "8.45.0",
+              "eslint-config-react-app": "7.0.1",
+              "eslint-plugin-react": "7.33.2",
+              "typescript": "4.9.5"
+            },
+            "scripts": {
+              "start": "react-scripts start",
+              "build": "react-scripts build",
+              "test": "react-scripts test",
+              "eject": "react-scripts eject"
+            }
+          }) }}
+          EOL
           
           # Create .npmrc
           echo "legacy-peer-deps=true" > .npmrc
-          echo "strict-peer-dependencies=false" >> .npmrc
           
-          # Remove existing node_modules if any
-          rm -rf node_modules
-          
-          # Install dependencies using the existing package.json
-          echo "Installing dependencies..."
+          # Clean install
+          rm -rf node_modules package-lock.json
           npm install
-          
-          echo "Checking installed dependencies..."
-          npm list --depth=0
 
       - name: Build And Deploy
         id: builddeploy
@@ -66,21 +92,14 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "/security-scan-dashboard"
-          api_location: "/api"
+          app_location: "security-scan-dashboard"  # Changed to match your structure
+          api_location: "SecurityScanFunction"     # Updated to match your structure
           output_location: "build"
-          app_build_command: |
-            npm install
-            npm run build
+          app_build_command: "npm run build"
 
-      - name: Verify Build
+      - name: Verify Build Output
+        working-directory: ./security-scan-dashboard
         if: steps.builddeploy.outcome == 'success'
         run: |
-          cd security-scan-dashboard
-          if [ -d "build" ]; then
-            echo "Build successful!"
-            ls -la build/
-          else
-            echo "Build failed!"
-            exit 1
-          fi
+          echo "Build directory contents:"
+          ls -la build/ || echo "Build directory not found"
