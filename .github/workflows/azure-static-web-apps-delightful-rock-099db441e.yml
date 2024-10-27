@@ -16,76 +16,62 @@ jobs:
         with:
           submodules: true
 
+      - name: Debug Directory Structure
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -la
+          echo "Repository contents:"
+          ls -la $GITHUB_WORKSPACE
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18.20.4'
-          cache: 'npm'
+
+      # Initialize project root
+      - name: Setup Project Root
+        run: |
+          echo '{
+            "name": "root",
+            "version": "1.0.0",
+            "private": true
+          }' > package.json
+          npm install --package-lock-only
 
       - name: Install Dependencies
-        working-directory: ./security-scan-dashboard
         run: |
-          echo "Installing dependencies..."
+          # Navigate to dashboard directory
+          cd security-scan-dashboard
           
-          # Create clean package.json with required dependencies
-          cat > package.json << 'EOL'
-          {
-            "name": "security-scan-dashboard",
-            "version": "1.0.0",
-            "private": true,
-            "dependencies": {
-              "@azure/msal-browser": "^2.39.0",
-              "@azure/msal-react": "^1.5.13",
-              "@fluentui/react-components": "^9.55.1",
-              "@microsoft/applicationinsights-web": "^3.3.3",
-              "@microsoft/signalr": "^7.0.14",
-              "axios": "^1.7.7",
-              "react": "^18.2.0",
-              "react-dom": "^18.2.0",
-              "react-router-dom": "^6.22.0",
-              "react-scripts": "5.0.1",
-              "recharts": "^2.13.0"
-            },
-            "devDependencies": {
-              "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-              "@types/node": "^16.18.0",
-              "@types/react": "^18.2.0",
-              "@types/react-dom": "^18.2.0",
-              "@typescript-eslint/eslint-plugin": "^5.62.0",
-              "@typescript-eslint/parser": "^5.62.0",
-              "eslint": "^8.45.0",
-              "eslint-config-react-app": "^7.0.1",
-              "typescript": "^4.9.5"
-            },
-            "scripts": {
-              "start": "react-scripts start",
-              "build": "react-scripts build",
-              "test": "react-scripts test",
-              "eject": "react-scripts eject"
-            },
-            "browserslist": {
-              "production": [
-                ">0.2%",
-                "not dead",
-                "not op_mini all"
-              ],
-              "development": [
-                "last 1 chrome version",
-                "last 1 firefox version",
-                "last 1 safari version"
-              ]
-            }
-          }
-          EOL
+          # Create package.json if it doesn't exist
+          if [ ! -f "package.json" ]; then
+            echo '{
+              "name": "security-scan-dashboard",
+              "version": "1.0.0",
+              "private": true,
+              "dependencies": {
+                "@azure/msal-browser": "^2.39.0",
+                "@azure/msal-react": "^1.5.13",
+                "@fluentui/react-components": "^9.55.1",
+                "react": "^18.2.0",
+                "react-dom": "^18.2.0",
+                "react-router-dom": "^6.22.0",
+                "react-scripts": "5.0.1"
+              },
+              "scripts": {
+                "start": "react-scripts start",
+                "build": "react-scripts build",
+                "test": "react-scripts test",
+                "eject": "react-scripts eject"
+              }
+            }' > package.json
+          fi
           
           # Create .npmrc
           echo "legacy-peer-deps=true
-          strict-peer-dependencies=false
-          auto-install-peers=true" > .npmrc
+          strict-peer-dependencies=false" > .npmrc
           
           # Install dependencies
-          npm cache clean --force
-          rm -rf node_modules package-lock.json
           npm install --legacy-peer-deps
 
       - name: Build And Deploy
@@ -95,26 +81,26 @@ jobs:
           REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
-          NODE_OPTIONS: "--max-old-space-size=4096"
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "security-scan-dashboard"
-          api_location: "SecurityScanFunction"
+          app_location: "./security-scan-dashboard"  # Updated path
+          api_location: "./SecurityScanFunction"     # Updated path
           output_location: "build"
+          skip_api_build: true                      # Skip API build if not needed
           app_build_command: |
+            cd security-scan-dashboard
             npm install --legacy-peer-deps
-            CI=false npm run build
+            npm run build
 
       - name: Handle Build Failure
-        if: failure() && steps.builddeploy.outcome == 'failure'
+        if: failure()
         run: |
-          cd security-scan-dashboard
-          echo "Checking node_modules:"
-          ls -la node_modules || echo "node_modules not found"
-          echo "Package versions:"
-          npm list react-router-dom || echo "react-router-dom not installed"
-          echo "Environment:"
-          node -v
-          npm -v
+          echo "Current working directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "security-scan-dashboard contents:"
+          ls -la security-scan-dashboard || echo "Directory not found"
+          echo "Package files:"
+          find . -name "package.json" -o -name "package-lock.json"
