@@ -2,16 +2,13 @@ name: Azure Static Web Apps CI/CD
 
 on:
   push:
-    branches:
-      - master
+    branches: [ master, main ]
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    branches:
-      - master
+    branches: [ master, main ]
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
@@ -22,16 +19,61 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'security-scan-dashboard/package-lock.json'
+          node-version: '18.20.4'
+
+      - name: Prepare Build Environment
+        working-directory: ./security-scan-dashboard
+        run: |
+          # Create .npmrc
+          echo "legacy-peer-deps=true
+          strict-peer-dependencies=false
+          auto-install-peers=true" > .npmrc
+
+          # Create babel.config.js
+          echo "module.exports = {
+            presets: [
+              '@babel/preset-env',
+              '@babel/preset-react',
+              '@babel/preset-typescript'
+            ],
+            plugins: [
+              '@babel/plugin-proposal-private-property-in-object'
+            ]
+          };" > babel.config.js
 
       - name: Install Dependencies
+        working-directory: ./security-scan-dashboard
         run: |
-          cd security-scan-dashboard
-          npm install
-          npm install axios @azure/msal-react @azure/msal-browser @fluentui/react-components --save
-          npm list axios
+          echo "Cleaning npm cache..."
+          npm cache clean --force
+          
+          echo "Removing old dependencies..."
+          rm -rf node_modules package-lock.json
+          
+          echo "Installing base dependencies first..."
+          npm install --save-exact \
+            @babel/core@7.23.9 \
+            @babel/preset-env@7.23.9 \
+            @babel/preset-react@7.23.9 \
+            @babel/preset-typescript@7.23.9 \
+            @babel/plugin-proposal-private-property-in-object@7.21.11
+          
+          echo "Installing main dependencies..."
+          npm install --save-exact \
+            react@18.2.0 \
+            react-dom@18.2.0 \
+            react-scripts@5.0.1 \
+            react-router-dom@6.22.0 \
+            @azure/msal-browser@2.38.0 \
+            @azure/msal-react@1.5.13 \
+            @fluentui/react-components@9.30.0 \
+            recharts@2.12.0
+          
+          echo "Installing dev dependencies..."
+          npm install --save-dev --save-exact \
+            typescript@4.9.5 \
+            @types/react@18.2.48 \
+            @types/react-dom@18.2.18
 
       - name: Build And Deploy
         id: builddeploy
@@ -39,23 +81,23 @@ jobs:
         env:
           REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
+          NODE_OPTIONS: "--max-old-space-size=4096"
+          CI: false
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "/security-scan-dashboard"
-          api_location: "/api"
+          app_location: "security-scan-dashboard"
+          api_location: "SecurityScanFunction"
           output_location: "build"
-          app_build_command: "npm run build"
+          app_build_command: |
+            CI=false npm run build
 
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
-          action: "close"
+      - name: Log Build Results
+        if: always()
+        run: |
+          echo "Build directory contents:"
+          ls -la security-scan-dashboard/build || echo "Build directory not found"
+          echo "Package versions:"
+          npm list @babel/core @babel/preset-react react react-dom
