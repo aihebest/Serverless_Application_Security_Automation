@@ -20,59 +20,32 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'
 
-      # Clean installation
-      - name: Clean Install
+      # Install dependencies using existing package-lock.json
+      - name: Install Dependencies
         run: |
           cd security-scan-dashboard
-          # Remove existing files
-          rm -rf node_modules package-lock.json
-
-          # Create clean package.json
-          cat > package.json << 'EOL'
-          {
-            "name": "security-scan-dashboard",
-            "version": "1.0.0",
-            "private": true,
-            "dependencies": {
-              "@azure/msal-browser": "2.38.0",
-              "@azure/msal-react": "1.5.9",
-              "@fluentui/react-components": "9.30.0",
-              "axios": "1.6.0",
-              "react": "18.2.0",
-              "react-dom": "18.2.0",
-              "react-scripts": "5.0.1"
-            },
-            "devDependencies": {
-              "@types/node": "16.18.0",
-              "@types/react": "18.2.0",
-              "@types/react-dom": "18.2.0",
-              "@typescript-eslint/eslint-plugin": "5.62.0",
-              "@typescript-eslint/parser": "5.62.0",
-              "eslint": "8.45.0",
-              "eslint-config-react-app": "7.0.1",
-              "eslint-plugin-react": "7.33.2",
-              "typescript": "4.9.5"
-            },
-            "scripts": {
-              "start": "react-scripts start",
-              "build": "react-scripts build",
-              "test": "react-scripts test",
-              "eject": "react-scripts eject"
-            },
-            "eslintConfig": {
-              "extends": [
-                "react-app"
-              ]
-            }
-          }
-          EOL
-
-          # Create .npmrc
-          echo "legacy-peer-deps=true" > .npmrc
           
-          # Clean install
-          npm ci
+          # Create .npmrc for handling peer dependencies
+          echo "legacy-peer-deps=true" > .npmrc
+          echo "strict-peer-dependencies=false" >> .npmrc
+          
+          # Install dependencies using existing package-lock.json
+          npm ci || (
+            # If npm ci fails, fall back to clean install
+            rm -rf node_modules
+            npm install
+          )
+          
+          # Additional dependencies if needed
+          npm install --save \
+            @azure/msal-browser@2.39.0 \
+            @azure/msal-react@1.5.13 \
+            @fluentui/react-components@9.55.1 \
+            @microsoft/applicationinsights-web@3.3.3 \
+            @microsoft/signalr@7.0.14 \
+            recharts@2.13.0
 
       - name: Build And Deploy
         id: builddeploy
@@ -96,7 +69,14 @@ jobs:
           cd security-scan-dashboard
           if [ -d "build" ]; then
             echo "Build successful!"
+            ls -la build/
           else
             echo "Build failed!"
             exit 1
           fi
+
+      - name: Log Dependencies
+        run: |
+          cd security-scan-dashboard
+          echo "Installed dependencies:"
+          npm list --depth=0
