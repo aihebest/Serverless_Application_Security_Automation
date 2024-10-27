@@ -24,10 +24,7 @@ jobs:
       - name: Setup Project Dependencies
         working-directory: ./security-scan-dashboard
         run: |
-          # Clean install
-          rm -rf node_modules package-lock.json
-          
-          # Create package.json with all required dependencies
+          # Create minimal package.json
           echo '{
             "name": "security-scan-dashboard",
             "version": "1.0.0",
@@ -36,13 +33,14 @@ jobs:
               "@azure/msal-browser": "2.38.0",
               "@azure/msal-react": "1.5.13",
               "@fluentui/react-components": "9.30.0",
+              "@microsoft/applicationinsights-web": "3.0.5",
+              "@microsoft/applicationinsights-react-js": "3.4.3",
+              "ajv": "8.12.0",
+              "ajv-keywords": "5.1.0",
               "react": "18.2.0",
               "react-dom": "18.2.0",
               "react-router-dom": "6.22.0",
-              "react-scripts": "5.0.1",
-              "ajv": "8.12.0",
-              "ajv-keywords": "5.1.0",
-              "schema-utils": "4.2.0"
+              "react-scripts": "5.0.1"
             },
             "devDependencies": {
               "@babel/core": "7.23.9",
@@ -56,21 +54,6 @@ jobs:
             "scripts": {
               "start": "react-scripts start",
               "build": "react-scripts build"
-            },
-            "eslintConfig": {
-              "extends": ["react-app"]
-            },
-            "browserslist": {
-              "production": [
-                ">0.2%",
-                "not dead",
-                "not op_mini all"
-              ],
-              "development": [
-                "last 1 chrome version",
-                "last 1 firefox version",
-                "last 1 safari version"
-              ]
             }
           }' > package.json
           
@@ -78,18 +61,42 @@ jobs:
           echo "legacy-peer-deps=true
           strict-peer-dependencies=false
           auto-install-peers=true" > .npmrc
+          
+          # Create telemetryService.js in services directory
+          mkdir -p src/services
+          echo 'import { ApplicationInsights } from "@microsoft/applicationinsights-web";
+
+          const appInsights = new ApplicationInsights({
+            config: {
+              connectionString: process.env.REACT_APP_APPINSIGHTS_CONNECTION_STRING,
+              enableAutoRouteTracking: true
+            }
+          });
+
+          appInsights.loadAppInsights();
+          appInsights.trackPageView();
+
+          export const trackEvent = (name, properties) => {
+            appInsights.trackEvent({ name, properties });
+          };
+
+          export const trackException = (error, properties) => {
+            appInsights.trackException({ error, properties });
+          };
+
+          export default appInsights;' > src/services/telemetryService.js
 
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
         run: |
+          # Clean install
+          rm -rf node_modules package-lock.json
+          
           echo "Installing dependencies..."
           npm install --legacy-peer-deps
           
-          echo "Installing additional dependencies..."
-          npm install --save ajv@8.12.0 ajv-keywords@5.1.0 schema-utils@4.2.0
-          
           echo "Verifying installations..."
-          npm list ajv ajv-keywords schema-utils
+          npm list @microsoft/applicationinsights-web || echo "Application Insights not found"
 
       - name: Build And Deploy
         id: builddeploy
@@ -98,6 +105,7 @@ jobs:
           REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
+          REACT_APP_APPINSIGHTS_CONNECTION_STRING: ${{ secrets.REACT_APP_APPINSIGHTS_CONNECTION_STRING }}
           CI: false
           GENERATE_SOURCEMAP: false
         with:
@@ -115,9 +123,9 @@ jobs:
         if: always()
         working-directory: ./security-scan-dashboard
         run: |
-          echo "Node version: $(node -v)"
-          echo "NPM version: $(npm -v)"
-          echo "Package versions:"
-          npm list --depth=0
-          echo "Build directory contents:"
-          ls -la build || echo "Build directory not found"
+          echo "Directory structure:"
+          ls -la
+          echo "Services directory:"
+          ls -la src/services || echo "Services directory not found"
+          echo "Dependencies:"
+          npm list --depth=0 || echo "Cannot read dependencies"
