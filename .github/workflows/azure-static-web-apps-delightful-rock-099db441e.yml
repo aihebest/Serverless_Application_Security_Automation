@@ -21,80 +21,39 @@ jobs:
         with:
           node-version: '18.20.4'
 
-      - name: Debug Directory Structure
+      - name: Prepare Build Environment
+        working-directory: ./security-scan-dashboard
         run: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la
-          echo "Repository root contents:"
-          ls -la $GITHUB_WORKSPACE
-
-      - name: Prepare Project Structure
-        run: |
-          # Check if we're in the right directory first
-          if [ -d "security-scan-dashboard" ]; then
-            cd security-scan-dashboard
-            echo "Found security-scan-dashboard directory"
-          else
-            echo "Creating security-scan-dashboard directory"
-            mkdir -p security-scan-dashboard
-          fi
+          # Create .env file with necessary settings
+          cat > .env << 'EOL'
+          REACT_APP_API_BASE_URL=${{ secrets.REACT_APP_API_BASE_URL }}
+          REACT_APP_CLIENT_ID=${{ secrets.AZURE_AD_CLIENT_ID }}
+          REACT_APP_TENANT_ID=${{ secrets.AZURE_AD_TENANT_ID }}
+          GENERATE_SOURCEMAP=false
+          SKIP_PREFLIGHT_CHECK=true
+          DISABLE_ESLINT_PLUGIN=true
+          CI=false
+          EOL
           
-          # Create standard React app structure
-          mkdir -p security-scan-dashboard/src
-          mkdir -p security-scan-dashboard/public
-          
-          # Create necessary files
-          touch security-scan-dashboard/src/index.js
-          touch security-scan-dashboard/public/index.html
-          
-          # Copy existing files if they exist
-          if [ -d "src" ]; then
-            cp -r src/* security-scan-dashboard/src/
-          fi
-          if [ -d "public" ]; then
-            cp -r public/* security-scan-dashboard/public/
-          fi
-          
-          # Create package.json if it doesn't exist
-          if [ ! -f "security-scan-dashboard/package.json" ]; then
-            echo '{
-              "name": "security-scan-dashboard",
-              "version": "1.0.0",
-              "private": true,
-              "dependencies": {
-                "@azure/msal-browser": "^2.39.0",
-                "@azure/msal-react": "^1.5.13",
-                "@fluentui/react-components": "^9.55.1",
-                "@fluentui/react-icons": "^2.0.261",
-                "@microsoft/applicationinsights-web": "^3.3.3",
-                "@microsoft/signalr": "^7.0.14",
-                "axios": "^1.7.7",
-                "react": "^18.2.0",
-                "react-dom": "^18.2.0",
-                "react-router-dom": "^6.22.0",
-                "react-scripts": "5.0.1",
-                "recharts": "^2.13.0"
-              },
-              "scripts": {
-                "start": "react-scripts start",
-                "build": "react-scripts build",
-                "test": "react-scripts test",
-                "eject": "react-scripts eject"
-              }
-            }' > security-scan-dashboard/package.json
-          fi
-          
-          # Create .npmrc
-          echo "legacy-peer-deps=true
-          strict-peer-dependencies=false" > security-scan-dashboard/.npmrc
-          
-          echo "Final directory structure:"
-          ls -la security-scan-dashboard
+          # Create .npmrc with necessary configurations
+          cat > .npmrc << 'EOL'
+          legacy-peer-deps=true
+          strict-peer-dependencies=false
+          auto-install-peers=true
+          node-version=18.20.4
+          EOL
 
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
         run: |
+          echo "Cleaning npm cache..."
+          npm cache clean --force
+          
+          echo "Removing old dependencies..."
+          rm -rf node_modules package-lock.json
+          
+          echo "Installing dependencies..."
+          npm install --legacy-peer-deps react@latest react-dom@latest
           npm install --legacy-peer-deps
 
       - name: Build And Deploy
@@ -105,6 +64,10 @@ jobs:
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
           NODE_OPTIONS: "--max-old-space-size=4096"
+          CI: false
+          GENERATE_SOURCEMAP: false
+          SKIP_PREFLIGHT_CHECK: true
+          DISABLE_ESLINT_PLUGIN: true
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -113,15 +76,12 @@ jobs:
           api_location: "SecurityScanFunction"
           output_location: "build"
           app_build_command: |
+            export NODE_OPTIONS="--max-old-space-size=4096"
             npm install --legacy-peer-deps
-            npm run build
+            CI=false npm run build
 
       - name: Log Build Results
         if: always()
         run: |
-          echo "Final directory structure:"
-          ls -la
-          echo "security-scan-dashboard contents:"
-          ls -la security-scan-dashboard || echo "Directory not found"
-          echo "Build directory:"
+          echo "Build directory contents:"
           ls -la security-scan-dashboard/build || echo "Build directory not found"
