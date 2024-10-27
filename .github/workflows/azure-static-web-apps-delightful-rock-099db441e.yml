@@ -24,34 +24,21 @@ jobs:
       - name: Setup Project Structure
         working-directory: ./security-scan-dashboard
         run: |
-          # Create necessary directories
-          mkdir -p src/services src/components/security
-          
-          # Create telemetryService.js
-          echo 'import { ApplicationInsights } from "@microsoft/applicationinsights-web";
-          
-          const appInsights = new ApplicationInsights({
-            config: {
-              connectionString: process.env.REACT_APP_APPINSIGHTS_CONNECTION_STRING,
-              enableAutoRouteTracking: true,
-              enableAjaxErrorStatusText: true,
-              enableCorsCorrelation: true
+          # Create webpack.config.js
+          echo 'const path = require("path");
+
+          module.exports = {
+            resolve: {
+              fallback: {
+                "buffer": require.resolve("buffer/"),
+                "crypto": require.resolve("crypto-browserify"),
+                "stream": require.resolve("stream-browserify"),
+                "util": require.resolve("util/")
+              }
             }
-          });
+          };' > webpack.config.js
           
-          appInsights.loadAppInsights();
-          
-          export const trackEvent = (name, properties) => {
-            appInsights.trackEvent({ name, properties });
-          };
-          
-          export const trackException = (error, properties) => {
-            appInsights.trackException({ error, properties });
-          };
-          
-          export default appInsights;' > src/services/telemetryService.js
-          
-          # Create package.json
+          # Create package.json with updated dependencies
           echo '{
             "name": "security-scan-dashboard",
             "version": "1.0.0",
@@ -60,59 +47,72 @@ jobs:
               "@azure/msal-browser": "2.38.0",
               "@azure/msal-react": "1.5.13",
               "@fluentui/react-components": "9.30.0",
-              "@microsoft/applicationinsights-web": "3.0.5",
+              "@microsoft/applicationinsights-web": "2.8.11",
               "@microsoft/applicationinsights-react-js": "3.4.3",
+              "ajv": "8.12.0",
+              "ajv-keywords": "5.1.0",
+              "buffer": "6.0.3",
+              "crypto-browserify": "3.12.0",
               "react": "18.2.0",
               "react-dom": "18.2.0",
               "react-router-dom": "6.22.0",
-              "react-scripts": "5.0.1"
+              "react-scripts": "5.0.1",
+              "stream-browserify": "3.0.0",
+              "util": "0.12.5"
             },
             "devDependencies": {
               "@babel/core": "7.23.9",
               "@babel/plugin-proposal-private-property-in-object": "7.21.11",
               "@babel/preset-env": "7.23.3",
               "@babel/preset-react": "7.23.3",
-              "@types/react": "18.2.0",
-              "@types/react-dom": "18.2.0",
-              "typescript": "4.9.5"
+              "webpack": "5.89.0",
+              "webpack-cli": "5.1.4"
             },
             "scripts": {
-              "start": "react-scripts start",
-              "build": "react-scripts build"
+              "start": "GENERATE_SOURCEMAP=false react-scripts start",
+              "build": "GENERATE_SOURCEMAP=false react-scripts build",
+              "test": "react-scripts test",
+              "eject": "react-scripts eject"
+            },
+            "eslintConfig": {
+              "extends": ["react-app"]
+            },
+            "browserslist": {
+              "production": [
+                ">0.2%",
+                "not dead",
+                "not op_mini all"
+              ],
+              "development": [
+                "last 1 chrome version",
+                "last 1 firefox version",
+                "last 1 safari version"
+              ]
             }
           }' > package.json
           
-          # Create .npmrc
+          # Create .npmrc with updated settings
           echo "legacy-peer-deps=true
-          strict-peer-dependencies=false" > .npmrc
-          
-          # Create index.js with App Insights
-          echo 'import React from "react";
-          import ReactDOM from "react-dom/client";
-          import App from "./App";
-          import { ApplicationInsightsErrorBoundary } from "@microsoft/applicationinsights-react-js";
-          import { reactPlugin } from "./services/telemetryService";
-          
-          const root = ReactDOM.createRoot(document.getElementById("root"));
-          root.render(
-            <ApplicationInsightsErrorBoundary onError={() => <h1>Error!</h1>} reactPlugin={reactPlugin}>
-              <React.StrictMode>
-                <App />
-              </React.StrictMode>
-            </ApplicationInsightsErrorBoundary>
-          );' > src/index.js
+          strict-peer-dependencies=false
+          engine-strict=false
+          auto-install-peers=true
+          fund=false" > .npmrc
+
+      - name: Clear npm cache and node_modules
+        working-directory: ./security-scan-dashboard
+        run: |
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
 
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
         run: |
-          # Clean install
-          rm -rf node_modules package-lock.json
+          # Install dependencies with specific configurations
+          npm install --legacy-peer-deps --no-fund
           
-          # Install dependencies
-          npm install --legacy-peer-deps
-          
-          echo "Verifying installations..."
-          npm list @microsoft/applicationinsights-web || echo "App Insights not found"
+          # Verify critical packages
+          npm list @microsoft/applicationinsights-web || true
+          npm list ajv webpack || true
 
       - name: Build And Deploy
         id: builddeploy
@@ -121,9 +121,9 @@ jobs:
           REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
-          REACT_APP_APPINSIGHTS_CONNECTION_STRING: ${{ secrets.REACT_APP_APPINSIGHTS_CONNECTION_STRING }}
           CI: false
           GENERATE_SOURCEMAP: false
+          NODE_OPTIONS: "--max-old-space-size=4096"
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -131,17 +131,4 @@ jobs:
           app_location: "security-scan-dashboard"
           api_location: "SecurityScanFunction"
           output_location: "build"
-          app_build_command: |
-            npm install --legacy-peer-deps
-            CI=false GENERATE_SOURCEMAP=false npm run build
-
-      - name: Log Build Status
-        if: always()
-        working-directory: ./security-scan-dashboard
-        run: |
-          echo "Directory structure:"
-          ls -la
-          echo "Services directory:"
-          ls -la src/services || echo "Services directory not found"
-          echo "Package versions:"
-          npm list @microsoft/applicationinsights-web @microsoft/applicationinsights-react-js
+          app_build_command: "GENERATE_SOURCEMAP=false CI=false npm run build"
