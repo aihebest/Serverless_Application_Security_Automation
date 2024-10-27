@@ -21,59 +21,20 @@ jobs:
         with:
           node-version: '18.20.4'
 
-      - name: Set up project structure
+      - name: Prepare Project
         run: |
-          # Ensure we're in the right directory
+          # Create security-scan-dashboard if it doesn't exist
           mkdir -p security-scan-dashboard
           cd security-scan-dashboard
           
-          # Create necessary directories
-          mkdir -p src public
-          
-          # Create basic React files
-          echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Security Dashboard</title></head><body><div id="root"></div></body></html>' > public/index.html
-          
-          echo 'import React from "react"; import ReactDOM from "react-dom/client"; import App from "./App"; const root = ReactDOM.createRoot(document.getElementById("root")); root.render(<React.StrictMode><App /></React.StrictMode>);' > src/index.js
-          
-          echo 'import React from "react"; function App() { return <div>Security Dashboard</div>; } export default App;' > src/App.js
-          
-          # Create package.json
+          # Create bare minimum package.json
           echo '{
             "name": "security-scan-dashboard",
             "version": "1.0.0",
             "private": true,
-            "dependencies": {
-              "@azure/msal-browser": "2.38.0",
-              "@azure/msal-react": "1.5.13",
-              "@fluentui/react-components": "9.30.0",
-              "react": "18.2.0",
-              "react-dom": "18.2.0",
-              "react-scripts": "5.0.1",
-              "react-router-dom": "6.22.0"
-            },
-            "devDependencies": {
-              "@babel/core": "7.23.9",
-              "@babel/preset-env": "7.23.9",
-              "@babel/preset-react": "7.23.9",
-              "@babel/plugin-proposal-private-property-in-object": "7.21.11"
-            },
             "scripts": {
               "start": "react-scripts start",
-              "build": "react-scripts build",
-              "test": "react-scripts test",
-              "eject": "react-scripts eject"
-            },
-            "browserslist": {
-              "production": [
-                ">0.2%",
-                "not dead",
-                "not op_mini all"
-              ],
-              "development": [
-                "last 1 chrome version",
-                "last 1 firefox version",
-                "last 1 safari version"
-              ]
+              "build": "react-scripts build"
             }
           }' > package.json
           
@@ -84,14 +45,69 @@ jobs:
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
         run: |
-          # Clean installation
+          # Remove existing node_modules and lock files
           rm -rf node_modules package-lock.json
           
-          # Install dependencies
-          npm install --legacy-peer-deps
+          # Install core dependencies first
+          npm install --save \
+            react@18.2.0 \
+            react-dom@18.2.0 \
+            react-scripts@5.0.1
           
-          # Verify installation
-          npm list react react-dom @babel/core
+          # Install other dependencies
+          npm install --save \
+            @azure/msal-browser@2.38.0 \
+            @azure/msal-react@1.5.13 \
+            @fluentui/react-components@9.30.0 \
+            react-router-dom@6.22.0
+          
+          # Install dev dependencies
+          npm install --save-dev \
+            @babel/core@7.23.9 \
+            @babel/plugin-proposal-private-property-in-object@7.21.11
+
+      - name: Create React App Structure
+        working-directory: ./security-scan-dashboard
+        run: |
+          # Create src and public directories
+          mkdir -p src public
+          
+          # Create index.html
+          echo '<!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <title>Security Dashboard</title>
+            </head>
+            <body>
+              <div id="root"></div>
+            </body>
+          </html>' > public/index.html
+          
+          # Create index.js
+          echo 'import React from "react";
+          import ReactDOM from "react-dom/client";
+          import App from "./App";
+          
+          const root = ReactDOM.createRoot(document.getElementById("root"));
+          root.render(
+            <React.StrictMode>
+              <App />
+            </React.StrictMode>
+          );' > src/index.js
+          
+          # Create App.js
+          echo 'import React from "react";
+          
+          function App() {
+            return (
+              <div>
+                <h1>Security Dashboard</h1>
+              </div>
+            );
+          }
+          
+          export default App;' > src/App.js
 
       - name: Build And Deploy
         id: builddeploy
@@ -108,18 +124,17 @@ jobs:
           app_location: "security-scan-dashboard"
           api_location: "SecurityScanFunction"
           output_location: "build"
-          app_build_command: |
-            npm install --legacy-peer-deps
-            CI=false npm run build
+          app_build_command: "CI=false npm run build"
 
-      - name: Log Build Status
+      - name: Log Status
         if: always()
+        working-directory: ./security-scan-dashboard
         run: |
-          echo "Workspace contents:"
+          echo "Node version:"
+          node -v
+          echo "NPM version:"
+          npm -v
+          echo "Directory contents:"
           ls -la
-          echo "Security dashboard contents:"
-          ls -la security-scan-dashboard || echo "Directory not found"
-          echo "Build directory contents:"
-          ls -la security-scan-dashboard/build || echo "Build directory not found"
-          echo "Package versions:"
-          cd security-scan-dashboard && npm list || echo "Cannot read package versions"
+          echo "Installed packages:"
+          npm list --depth=0
