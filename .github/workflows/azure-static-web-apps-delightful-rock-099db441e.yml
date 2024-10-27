@@ -20,17 +20,40 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18.20.4'
-          cache: 'npm'
 
-      - name: Install Dependencies
-        working-directory: ./security-scan-dashboard
+      - name: Debug Directory Structure
         run: |
-          echo "Installing dependencies..."
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "Repository root contents:"
+          ls -la $GITHUB_WORKSPACE
+
+      - name: Initialize Project
+        run: |
+          # Create package.json in repository root if it doesn't exist
+          if [ ! -f "package.json" ]; then
+            echo '{
+              "name": "security-automation-root",
+              "version": "1.0.0",
+              "private": true,
+              "workspaces": [
+                "security-scan-dashboard"
+              ]
+            }' > package.json
+          fi
+          
+          # Install root dependencies
+          npm install
+
+      - name: Install Dashboard Dependencies
+        run: |
+          cd security-scan-dashboard
+          
+          # Ensure all required files exist
+          echo "Installing dashboard dependencies..."
           npm install --legacy-peer-deps
-          # Install missing Babel plugin
-          npm install --save-dev @babel/plugin-proposal-private-property-in-object@^7.21.11
-          # Verify installations
-          npm list @babel/plugin-proposal-private-property-in-object
+          npm install --save-dev @babel/plugin-proposal-private-property-in-object@7.21.11
 
       - name: Build And Deploy
         id: builddeploy
@@ -46,4 +69,16 @@ jobs:
           app_location: "security-scan-dashboard"
           api_location: "SecurityScanFunction"
           output_location: "build"
-          app_build_command: "CI=false npm run build"  # Added CI=false to ignore warnings
+          app_build_command: "npm install && npm run build"
+
+      - name: Verify Build
+        if: steps.builddeploy.outcome == 'success'
+        run: |
+          cd security-scan-dashboard
+          if [ -d "build" ]; then
+            echo "Build directory contents:"
+            ls -la build/
+          else
+            echo "Build directory not found!"
+            exit 1
+          fi
