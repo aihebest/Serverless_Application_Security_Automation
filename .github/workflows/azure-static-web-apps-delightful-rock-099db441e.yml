@@ -21,39 +21,30 @@ jobs:
         with:
           node-version: '18.20.4'
 
-      - name: Debug Directory Structure
+      - name: Setup Project Dependencies
+        working-directory: ./security-scan-dashboard
         run: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la
-          echo "Repository root contents:"
-          ls -la $GITHUB_WORKSPACE
-
-      - name: Initialize Project
-        run: |
-          # Create package.json in repository root if it doesn't exist
-          if [ ! -f "package.json" ]; then
-            echo '{
-              "name": "security-automation-root",
-              "version": "1.0.0",
-              "private": true,
-              "workspaces": [
-                "security-scan-dashboard"
-              ]
-            }' > package.json
-          fi
+          echo "Creating/updating package.json..."
+          # Add required dependencies
+          npm install --save ajv@^8.0.0
+          npm install --save-dev @babel/plugin-proposal-private-property-in-object@^7.21.11
           
-          # Install root dependencies
-          npm install
-
-      - name: Install Dashboard Dependencies
-        run: |
-          cd security-scan-dashboard
+          # Create proper .npmrc
+          echo "legacy-peer-deps=true
+          strict-peer-dependencies=false
+          auto-install-peers=true
+          node-version=18.20.4" > .npmrc
           
-          # Ensure all required files exist
-          echo "Installing dashboard dependencies..."
+          # Clean install with specific resolutions
           npm install --legacy-peer-deps
-          npm install --save-dev @babel/plugin-proposal-private-property-in-object@7.21.11
+          
+          # Install additional necessary packages
+          npm install --save-dev \
+            @types/node@16.18.0 \
+            typescript@4.9.5 \
+            @typescript-eslint/eslint-plugin@5.62.0 \
+            @typescript-eslint/parser@5.62.0 \
+            eslint-config-react-app@7.0.1
 
       - name: Build And Deploy
         id: builddeploy
@@ -62,6 +53,7 @@ jobs:
           REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
+          NODE_OPTIONS: "--max-old-space-size=4096"
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -69,16 +61,6 @@ jobs:
           app_location: "security-scan-dashboard"
           api_location: "SecurityScanFunction"
           output_location: "build"
-          app_build_command: "npm install && npm run build"
-
-      - name: Verify Build
-        if: steps.builddeploy.outcome == 'success'
-        run: |
-          cd security-scan-dashboard
-          if [ -d "build" ]; then
-            echo "Build directory contents:"
-            ls -la build/
-          else
-            echo "Build directory not found!"
-            exit 1
-          fi
+          app_build_command: |
+            npm install --legacy-peer-deps
+            npm run build
