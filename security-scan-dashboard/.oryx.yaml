@@ -1,0 +1,19 @@
+# Create this file at the root: security-scan-dashboard/.oryx.yaml
+
+build:
+  commands:
+    - npm install --legacy-peer-deps
+    - npm run build
+  env:
+    - name: NODE_VERSION
+      value: "18.20.4"
+    - name: NODE_OPTIONS
+      value: "--max-old-space-size=4096"
+    - name: NPM_CONFIG_LEGACY_PEER_DEPS
+      value: "true"
+
+platform:
+  nodejs:
+    version: "18.20.4"
+
+outputDirectory: build
