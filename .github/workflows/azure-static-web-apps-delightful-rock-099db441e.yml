@@ -1,84 +1,36 @@
+# Create this file at: .github/workflows/azure-static-web-apps-delightful-rock-099db441e.yml
+
 name: Azure Static Web Apps CI/CD
 
 on:
   push:
-    branches: [ master, main ]
+    branches:
+      - master
+      - main
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    branches: [ master, main ]
+    branches:
+      - master
+      - main
 
 jobs:
   build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Verify Directory Structure
-        run: |
-          echo "Current directory structure:"
-          ls -la
-          echo "Contents of github/workflows:"
-          ls -la .github/workflows || echo "Workflows directory not found"
-          echo "Contents of security-scan-dashboard:"
-          ls -la security-scan-dashboard || echo "Dashboard directory not found"
-
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
         run: |
-          echo "Installing project dependencies..."
-          
-          # Ensure we're in the correct directory
-          pwd
-          
-          # Create fresh package.json
-          cat > package.json << 'EOL'
-          ${{ toJSON({
-            "name": "security-scan-dashboard",
-            "version": "1.0.0",
-            "private": true,
-            "dependencies": {
-              "@azure/msal-browser": "2.38.0",
-              "@azure/msal-react": "1.5.9",
-              "@fluentui/react-components": "9.30.0",
-              "axios": "1.6.0",
-              "react": "18.2.0",
-              "react-dom": "18.2.0",
-              "react-scripts": "5.0.1"
-            },
-            "devDependencies": {
-              "@types/node": "16.18.0",
-              "@types/react": "18.2.0",
-              "@types/react-dom": "18.2.0",
-              "@typescript-eslint/eslint-plugin": "5.62.0",
-              "@typescript-eslint/parser": "5.62.0",
-              "eslint": "8.45.0",
-              "eslint-config-react-app": "7.0.1",
-              "eslint-plugin-react": "7.33.2",
-              "typescript": "4.9.5"
-            },
-            "scripts": {
-              "start": "react-scripts start",
-              "build": "react-scripts build",
-              "test": "react-scripts test",
-              "eject": "react-scripts eject"
-            }
-          }) }}
-          EOL
-          
-          # Create .npmrc
-          echo "legacy-peer-deps=true" > .npmrc
-          
-          # Clean install
-          rm -rf node_modules package-lock.json
           npm install
 
       - name: Build And Deploy
@@ -87,19 +39,22 @@ jobs:
         env:
           REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
-          REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "security-scan-dashboard"  # Changed to match your structure
-          api_location: "SecurityScanFunction"     # Updated to match your structure
+          app_location: "security-scan-dashboard"
+          api_location: "SecurityScanFunction"
           output_location: "build"
-          app_build_command: "npm run build"
 
-      - name: Verify Build Output
-        working-directory: ./security-scan-dashboard
-        if: steps.builddeploy.outcome == 'success'
-        run: |
-          echo "Build directory contents:"
-          ls -la build/ || echo "Build directory not found"
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
+          action: "close"
