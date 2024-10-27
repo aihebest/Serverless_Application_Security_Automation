@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -22,30 +23,37 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
-      # Install dependencies using existing package-lock.json
+      - name: Debug Directory Structure
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          ls -la
+          echo "security-scan-dashboard contents:"
+          ls -la security-scan-dashboard || echo "Directory not found"
+
       - name: Install Dependencies
         run: |
+          # Navigate to the project directory
           cd security-scan-dashboard
           
-          # Create .npmrc for handling peer dependencies
+          # Debug project structure
+          echo "Project directory contents:"
+          ls -la
+          
+          # Create .npmrc
           echo "legacy-peer-deps=true" > .npmrc
           echo "strict-peer-dependencies=false" >> .npmrc
           
-          # Install dependencies using existing package-lock.json
-          npm ci || (
-            # If npm ci fails, fall back to clean install
-            rm -rf node_modules
-            npm install
-          )
+          # Remove existing node_modules if any
+          rm -rf node_modules
           
-          # Additional dependencies if needed
-          npm install --save \
-            @azure/msal-browser@2.39.0 \
-            @azure/msal-react@1.5.13 \
-            @fluentui/react-components@9.55.1 \
-            @microsoft/applicationinsights-web@3.3.3 \
-            @microsoft/signalr@7.0.14 \
-            recharts@2.13.0
+          # Install dependencies using the existing package.json
+          echo "Installing dependencies..."
+          npm install
+          
+          echo "Checking installed dependencies..."
+          npm list --depth=0
 
       - name: Build And Deploy
         id: builddeploy
@@ -61,7 +69,9 @@ jobs:
           app_location: "/security-scan-dashboard"
           api_location: "/api"
           output_location: "build"
-          app_build_command: "npm run build"
+          app_build_command: |
+            npm install
+            npm run build
 
       - name: Verify Build
         if: steps.builddeploy.outcome == 'success'
@@ -74,9 +84,3 @@ jobs:
             echo "Build failed!"
             exit 1
           fi
-
-      - name: Log Dependencies
-        run: |
-          cd security-scan-dashboard
-          echo "Installed dependencies:"
-          npm list --depth=0
