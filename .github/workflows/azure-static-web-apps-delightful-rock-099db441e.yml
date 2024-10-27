@@ -21,41 +21,58 @@ jobs:
         with:
           node-version: '18'
 
-      # Initialize npm in the correct directory
-      - name: Initialize npm project
+      # Clean installation
+      - name: Clean Install
         run: |
           cd security-scan-dashboard
-          if [ ! -f package.json ]; then
-            npm init -y
-          fi
+          # Remove existing files
+          rm -rf node_modules package-lock.json
 
-      # Install dependencies with proper error handling
-      - name: Install Dependencies
-        run: |
-          cd security-scan-dashboard
-          echo "Installing dependencies..."
-          rm -rf node_modules package-lock.json || true
-          npm install --force \
-            react@latest \
-            react-dom@latest \
-            react-scripts@latest \
-            axios@latest \
-            @azure/msal-react@latest \
-            @azure/msal-browser@latest \
-            @fluentui/react-components@latest
-          npm install --save-dev \
-            @typescript-eslint/eslint-plugin@latest \
-            @typescript-eslint/parser@latest \
-            typescript@latest
-          echo "Dependencies installed successfully"
-          
-      # Create .npmrc if it doesn't exist
-      - name: Create .npmrc
-        run: |
-          cd security-scan-dashboard
+          # Create clean package.json
+          cat > package.json << 'EOL'
+          {
+            "name": "security-scan-dashboard",
+            "version": "1.0.0",
+            "private": true,
+            "dependencies": {
+              "@azure/msal-browser": "2.38.0",
+              "@azure/msal-react": "1.5.9",
+              "@fluentui/react-components": "9.30.0",
+              "axios": "1.6.0",
+              "react": "18.2.0",
+              "react-dom": "18.2.0",
+              "react-scripts": "5.0.1"
+            },
+            "devDependencies": {
+              "@types/node": "16.18.0",
+              "@types/react": "18.2.0",
+              "@types/react-dom": "18.2.0",
+              "@typescript-eslint/eslint-plugin": "5.62.0",
+              "@typescript-eslint/parser": "5.62.0",
+              "eslint": "8.45.0",
+              "eslint-config-react-app": "7.0.1",
+              "eslint-plugin-react": "7.33.2",
+              "typescript": "4.9.5"
+            },
+            "scripts": {
+              "start": "react-scripts start",
+              "build": "react-scripts build",
+              "test": "react-scripts test",
+              "eject": "react-scripts eject"
+            },
+            "eslintConfig": {
+              "extends": [
+                "react-app"
+              ]
+            }
+          }
+          EOL
+
+          # Create .npmrc
           echo "legacy-peer-deps=true" > .npmrc
-          echo "strict-peer-dependencies=false" >> .npmrc
-          echo "auto-install-peers=true" >> .npmrc
+          
+          # Clean install
+          npm ci
 
       - name: Build And Deploy
         id: builddeploy
@@ -73,15 +90,13 @@ jobs:
           output_location: "build"
           app_build_command: "npm run build"
 
-      # Add deployment verification
-      - name: Verify Build Output
+      - name: Verify Build
         if: steps.builddeploy.outcome == 'success'
         run: |
           cd security-scan-dashboard
           if [ -d "build" ]; then
-            echo "Build directory exists and contains:"
-            ls -la build
+            echo "Build successful!"
           else
-            echo "Build directory not found!"
+            echo "Build failed!"
             exit 1
           fi
