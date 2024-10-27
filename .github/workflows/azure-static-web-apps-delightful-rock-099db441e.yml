@@ -21,10 +21,13 @@ jobs:
         with:
           node-version: '18.20.4'
 
-      - name: Setup Project Dependencies
+      - name: Setup Project Structure
         working-directory: ./security-scan-dashboard
         run: |
-          # Create minimal package.json
+          # Create necessary directories
+          mkdir -p src/components/security src/services
+          
+          # Create package.json
           echo '{
             "name": "security-scan-dashboard",
             "version": "1.0.0",
@@ -34,13 +37,14 @@ jobs:
               "@azure/msal-react": "1.5.13",
               "@fluentui/react-components": "9.30.0",
               "@microsoft/applicationinsights-web": "3.0.5",
-              "@microsoft/applicationinsights-react-js": "3.4.3",
               "ajv": "8.12.0",
-              "ajv-keywords": "5.1.0",
               "react": "18.2.0",
               "react-dom": "18.2.0",
               "react-router-dom": "6.22.0",
-              "react-scripts": "5.0.1"
+              "react-scripts": "5.0.1",
+              "recharts": "2.10.3",
+              "d3-scale": "4.0.2",
+              "d3-array": "3.2.4"
             },
             "devDependencies": {
               "@babel/core": "7.23.9",
@@ -49,6 +53,7 @@ jobs:
               "@babel/plugin-proposal-private-property-in-object": "7.21.11",
               "@types/react": "18.2.0",
               "@types/react-dom": "18.2.0",
+              "@types/recharts": "1.8.29",
               "typescript": "4.9.5"
             },
             "scripts": {
@@ -62,29 +67,22 @@ jobs:
           strict-peer-dependencies=false
           auto-install-peers=true" > .npmrc
           
-          # Create telemetryService.js in services directory
-          mkdir -p src/services
-          echo 'import { ApplicationInsights } from "@microsoft/applicationinsights-web";
+          # Create SecurityComponents.js with Recharts
+          echo 'import React from "react";
+          import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 
-          const appInsights = new ApplicationInsights({
-            config: {
-              connectionString: process.env.REACT_APP_APPINSIGHTS_CONNECTION_STRING,
-              enableAutoRouteTracking: true
-            }
-          });
-
-          appInsights.loadAppInsights();
-          appInsights.trackPageView();
-
-          export const trackEvent = (name, properties) => {
-            appInsights.trackEvent({ name, properties });
-          };
-
-          export const trackException = (error, properties) => {
-            appInsights.trackException({ error, properties });
-          };
-
-          export default appInsights;' > src/services/telemetryService.js
+          export const SecurityTrendChart = ({ data }) => {
+            return (
+              <LineChart width={600} height={300} data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="score" stroke="#8884d8" />
+              </LineChart>
+            );
+          };' > src/components/security/SecurityComponents.js
 
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
@@ -92,11 +90,17 @@ jobs:
           # Clean install
           rm -rf node_modules package-lock.json
           
-          echo "Installing dependencies..."
+          echo "Installing core dependencies first..."
+          npm install --save react@18.2.0 react-dom@18.2.0 react-scripts@5.0.1
+          
+          echo "Installing Recharts and dependencies..."
+          npm install --save recharts@2.10.3 d3-scale@4.0.2 d3-array@3.2.4
+          
+          echo "Installing remaining dependencies..."
           npm install --legacy-peer-deps
           
           echo "Verifying installations..."
-          npm list @microsoft/applicationinsights-web || echo "Application Insights not found"
+          npm list recharts || echo "Recharts not found"
 
       - name: Build And Deploy
         id: builddeploy
@@ -105,7 +109,6 @@ jobs:
           REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
           REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
-          REACT_APP_APPINSIGHTS_CONNECTION_STRING: ${{ secrets.REACT_APP_APPINSIGHTS_CONNECTION_STRING }}
           CI: false
           GENERATE_SOURCEMAP: false
         with:
@@ -125,7 +128,9 @@ jobs:
         run: |
           echo "Directory structure:"
           ls -la
-          echo "Services directory:"
-          ls -la src/services || echo "Services directory not found"
-          echo "Dependencies:"
-          npm list --depth=0 || echo "Cannot read dependencies"
+          echo "Security components:"
+          ls -la src/components/security || echo "Security components directory not found"
+          echo "Node modules:"
+          ls -la node_modules/recharts || echo "Recharts not installed"
+          echo "Package versions:"
+          npm list recharts d3-scale d3-array
