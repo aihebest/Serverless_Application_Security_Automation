@@ -20,29 +20,42 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
 
-      - name: Clear npm cache
-        run: npm cache clean --force
-
-      - name: Remove existing node_modules
+      # Initialize npm in the correct directory
+      - name: Initialize npm project
         run: |
           cd security-scan-dashboard
-          rm -rf node_modules package-lock.json
+          if [ ! -f package.json ]; then
+            npm init -y
+          fi
 
+      # Install dependencies with proper error handling
       - name: Install Dependencies
         run: |
           cd security-scan-dashboard
-          npm install --legacy-peer-deps
-          npm install --save \
+          echo "Installing dependencies..."
+          rm -rf node_modules package-lock.json || true
+          npm install --force \
+            react@latest \
+            react-dom@latest \
+            react-scripts@latest \
             axios@latest \
             @azure/msal-react@latest \
             @azure/msal-browser@latest \
-            @fluentui/react-components@latest \
-            typescript@latest \
-            @typescript-eslint/parser@latest \
+            @fluentui/react-components@latest
+          npm install --save-dev \
             @typescript-eslint/eslint-plugin@latest \
-            eslint-config-react-app@latest
+            @typescript-eslint/parser@latest \
+            typescript@latest
+          echo "Dependencies installed successfully"
+          
+      # Create .npmrc if it doesn't exist
+      - name: Create .npmrc
+        run: |
+          cd security-scan-dashboard
+          echo "legacy-peer-deps=true" > .npmrc
+          echo "strict-peer-dependencies=false" >> .npmrc
+          echo "auto-install-peers=true" >> .npmrc
 
       - name: Build And Deploy
         id: builddeploy
@@ -59,3 +72,16 @@ jobs:
           api_location: "/api"
           output_location: "build"
           app_build_command: "npm run build"
+
+      # Add deployment verification
+      - name: Verify Build Output
+        if: steps.builddeploy.outcome == 'success'
+        run: |
+          cd security-scan-dashboard
+          if [ -d "build" ]; then
+            echo "Build directory exists and contains:"
+            ls -la build
+          else
+            echo "Build directory not found!"
+            exit 1
+          fi

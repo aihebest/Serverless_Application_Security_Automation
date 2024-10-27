@@ -1,87 +1,46 @@
-name: Azure Static Web Apps CI/CD
-
-on:
-  push:
-    branches: [ master, main ]
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches: [ master, main ]
-
-jobs:
-  build_and_deploy_job:
-    runs-on: ubuntu-latest
-    name: Build and Deploy Job
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      # Initialize npm in the correct directory
-      - name: Initialize npm project
-        run: |
-          cd security-scan-dashboard
-          if [ ! -f package.json ]; then
-            npm init -y
-          fi
-
-      # Install dependencies with proper error handling
-      - name: Install Dependencies
-        run: |
-          cd security-scan-dashboard
-          echo "Installing dependencies..."
-          rm -rf node_modules package-lock.json || true
-          npm install --force \
-            react@latest \
-            react-dom@latest \
-            react-scripts@latest \
-            axios@latest \
-            @azure/msal-react@latest \
-            @azure/msal-browser@latest \
-            @fluentui/react-components@latest
-          npm install --save-dev \
-            @typescript-eslint/eslint-plugin@latest \
-            @typescript-eslint/parser@latest \
-            typescript@latest
-          echo "Dependencies installed successfully"
-          
-      # Create .npmrc if it doesn't exist
-      - name: Create .npmrc
-        run: |
-          cd security-scan-dashboard
-          echo "legacy-peer-deps=true" > .npmrc
-          echo "strict-peer-dependencies=false" >> .npmrc
-          echo "auto-install-peers=true" >> .npmrc
-
-      - name: Build And Deploy
-        id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
-        env:
-          REACT_APP_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
-          REACT_APP_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
-          REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: "upload"
-          app_location: "/security-scan-dashboard"
-          api_location: "/api"
-          output_location: "build"
-          app_build_command: "npm run build"
-
-      # Add deployment verification
-      - name: Verify Build Output
-        if: steps.builddeploy.outcome == 'success'
-        run: |
-          cd security-scan-dashboard
-          if [ -d "build" ]; then
-            echo "Build directory exists and contains:"
-            ls -la build
-          else
-            echo "Build directory not found!"
-            exit 1
-          fi
+{
+  "name": "security-scan-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@azure/msal-browser": "^3.1.0",
+    "@azure/msal-react": "^2.0.3",
+    "@fluentui/react-components": "^9.30.0",
+    "axios": "^1.6.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "@typescript-eslint/parser": "^6.11.0",
+    "eslint": "^8.53.0",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-jest": "^27.6.0",
+    "typescript": "^5.2.2"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
