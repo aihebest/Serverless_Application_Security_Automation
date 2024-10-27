@@ -24,10 +24,21 @@ jobs:
       - name: Setup Project Structure
         working-directory: ./security-scan-dashboard
         run: |
-          # Create necessary directories
-          mkdir -p src/services src/components/security
+          # Create webpack.config.js for custom configuration
+          echo 'const path = require("path");
+
+          module.exports = {
+            resolve: {
+              fallback: {
+                "buffer": require.resolve("buffer/"),
+                "crypto": require.resolve("crypto-browserify"),
+                "stream": require.resolve("stream-browserify"),
+                "util": require.resolve("util/")
+              }
+            }
+          };' > webpack.config.js
           
-          # Create package.json
+          # Create package.json with all necessary dependencies
           echo '{
             "name": "security-scan-dashboard",
             "version": "1.0.0",
@@ -36,98 +47,71 @@ jobs:
               "@azure/msal-browser": "2.38.0",
               "@azure/msal-react": "1.5.13",
               "@fluentui/react-components": "9.30.0",
-              "@microsoft/applicationinsights-web": "3.0.5",
-              "axios": "1.6.2",
+              "ajv": "8.12.0",
+              "ajv-keywords": "5.1.0",
+              "buffer": "6.0.3",
+              "crypto-browserify": "3.12.0",
               "react": "18.2.0",
               "react-dom": "18.2.0",
               "react-router-dom": "6.22.0",
               "react-scripts": "5.0.1",
-              "recharts": "2.10.3"
+              "stream-browserify": "3.0.0",
+              "util": "0.12.5"
             },
             "devDependencies": {
               "@babel/core": "7.23.9",
-              "@babel/preset-react": "7.23.3",
-              "@babel/preset-env": "7.23.3",
               "@babel/plugin-proposal-private-property-in-object": "7.21.11",
-              "@types/react": "18.2.0",
-              "@types/react-dom": "18.2.0",
-              "typescript": "4.9.5"
+              "@babel/preset-env": "7.23.3",
+              "@babel/preset-react": "7.23.3",
+              "webpack": "5.89.0",
+              "webpack-cli": "5.1.4"
             },
             "scripts": {
-              "start": "react-scripts start",
-              "build": "react-scripts build"
+              "start": "GENERATE_SOURCEMAP=false react-scripts start",
+              "build": "GENERATE_SOURCEMAP=false react-scripts build",
+              "test": "react-scripts test",
+              "eject": "react-scripts eject"
+            },
+            "eslintConfig": {
+              "extends": ["react-app"]
+            },
+            "browserslist": {
+              "production": [
+                ">0.2%",
+                "not dead",
+                "not op_mini all"
+              ],
+              "development": [
+                "last 1 chrome version",
+                "last 1 firefox version",
+                "last 1 safari version"
+              ]
             }
           }' > package.json
           
           # Create .npmrc
           echo "legacy-peer-deps=true
           strict-peer-dependencies=false
+          engine-strict=false
           auto-install-peers=true" > .npmrc
-          
-          # Create securityApi.js service
-          echo 'import axios from "axios";
-          import { msalInstance } from "../config/authConfig";
-
-          class SecurityApiService {
-            constructor() {
-              this.baseURL = process.env.REACT_APP_API_BASE_URL;
-              this.api = axios.create({
-                baseURL: this.baseURL,
-                headers: {
-                  "Content-Type": "application/json"
-                }
-              });
-
-              this.setupInterceptors();
-            }
-
-            setupInterceptors() {
-              this.api.interceptors.request.use(
-                async (config) => {
-                  const token = await this.getAuthToken();
-                  config.headers.Authorization = `Bearer ${token}`;
-                  return config;
-                },
-                (error) => Promise.reject(error)
-              );
-            }
-
-            async getAuthToken() {
-              const account = msalInstance.getAllAccounts()[0];
-              if (!account) throw new Error("No active account");
-
-              const response = await msalInstance.acquireTokenSilent({
-                scopes: [process.env.REACT_APP_API_SCOPE],
-                account: account
-              });
-              
-              return response.accessToken;
-            }
-
-            async getSecurityMetrics() {
-              const response = await this.api.get("/api/security/metrics");
-              return response.data;
-            }
-
-            async getScanResults() {
-              const response = await this.api.get("/api/security/scan-results");
-              return response.data;
-            }
-          }
-
-          export default new SecurityApiService();' > src/services/securityApi.js
 
       - name: Install Dependencies
         working-directory: ./security-scan-dashboard
         run: |
-          # Clean install
+          # Remove existing installations
           rm -rf node_modules package-lock.json
           
-          echo "Installing dependencies..."
+          # Install core dependencies first
+          npm install --save buffer@6.0.3 crypto-browserify@3.12.0 stream-browserify@3.0.0 util@0.12.5
+          
+          # Install ajv and related packages
+          npm install --save ajv@8.12.0 ajv-keywords@5.1.0
+          
+          # Install remaining dependencies
           npm install --legacy-peer-deps
           
           echo "Verifying installations..."
-          npm list axios || echo "Axios not found"
+          npm list ajv ajv-keywords webpack
 
       - name: Build And Deploy
         id: builddeploy
@@ -138,6 +122,7 @@ jobs:
           REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
           CI: false
           GENERATE_SOURCEMAP: false
+          NODE_OPTIONS: "--max-old-space-size=4096"
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_ROCK_099DB441E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -146,16 +131,13 @@ jobs:
           api_location: "SecurityScanFunction"
           output_location: "build"
           app_build_command: |
-            npm install --legacy-peer-deps
-            CI=false GENERATE_SOURCEMAP=false npm run build
+            GENERATE_SOURCEMAP=false CI=false npm run build
 
       - name: Log Build Status
         if: always()
         working-directory: ./security-scan-dashboard
         run: |
-          echo "Directory structure:"
-          ls -la
-          echo "Services directory:"
-          ls -la src/services || echo "Services directory not found"
-          echo "Package versions:"
-          npm list axios recharts @azure/msal-browser || echo "Cannot read package versions"
+          echo "Node version: $(node -v)"
+          echo "NPM version: $(npm -v)"
+          echo "Installed packages:"
+          npm list ajv ajv-keywords webpack || echo "Packages not found"
