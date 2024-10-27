@@ -1,0 +1,45 @@
+<!-- File: ./security-scan-dashboard/.dependency-check-suppressions.xml -->
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!-- React Development Dependencies -->
+    <suppress>
+        <notes>False positive for React development server</notes>
+        <packageUrl regex="true">^pkg:npm/react-scripts@.*$</packageUrl>
+        <cpe>cpe:/a:development_server_project:development_server</cpe>
+    </suppress>
+    
+    <!-- Webpack Development Server -->
+    <suppress>
+        <notes>Dev dependency only - not in production</notes>
+        <packageUrl regex="true">^pkg:npm/webpack-dev-server@.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+    
+    <!-- ESLint Dependencies -->
+    <suppress>
+        <notes>Development tooling only</notes>
+        <packageUrl regex="true">^pkg:npm/eslint@.*$</packageUrl>
+        <cpe>cpe:/a:eslint:eslint</cpe>
+    </suppress>
+    
+    <!-- Babel Dependencies -->
+    <suppress>
+        <notes>Build tooling only - not in production</notes>
+        <packageUrl regex="true">^pkg:npm/@babel.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+    
+    <!-- Test Dependencies -->
+    <suppress>
+        <notes>Test frameworks - not in production</notes>
+        <packageUrl regex="true">^pkg:npm/jest@.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+    
+    <!-- TypeScript Dependencies -->
+    <suppress>
+        <notes>Development typings only</notes>
+        <packageUrl regex="true">^pkg:npm/@types.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+</suppressions>

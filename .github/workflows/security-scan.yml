@@ -1,0 +1,99 @@
+# .github/workflows/security-scan.yml
+name: Security Scanning
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    - cron: '0 0 * * *'  # Run daily at midnight
+
+jobs:
+  security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.20.4'
+
+      # OWASP Dependency Check
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'Security Scanner'
+          path: '.'
+          format: 'HTML'
+          args: >
+            --suppression .dependency-check-suppressions.xml
+            --failOnCVSS 7
+            --enableRetired
+
+      - name: Upload OWASP Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-check-report
+          path: ${{ github.workspace }}/reports/dependency-check-report.html
+
+      # Snyk Security Scan
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+          command: monitor
+
+      # NPM Audit
+      - name: Run npm audit
+        run: |
+          cd security-scan-dashboard
+          npm audit --json || true > npm-audit.json
+
+      # Generate Security Report
+      - name: Generate Security Report
+        run: |
+          echo "# Security Scan Results" > security-report.md
+          echo "## Scan Date: $(date)" >> security-report.md
+          
+          echo "## OWASP Dependency Check Results" >> security-report.md
+          if [ -f "reports/dependency-check-report.html" ]; then
+            echo "OWASP Dependency Check completed. See attached report." >> security-report.md
+          else
+            echo "OWASP Dependency Check failed to generate report." >> security-report.md
+          fi
+          
+          echo "## Snyk Scan Results" >> security-report.md
+          echo "See Snyk dashboard for detailed results." >> security-report.md
+          
+          echo "## NPM Audit Results" >> security-report.md
+          if [ -f "security-scan-dashboard/npm-audit.json" ]; then
+            echo "\`\`\`" >> security-report.md
+            cat security-scan-dashboard/npm-audit.json >> security-report.md
+            echo "\`\`\`" >> security-report.md
+          fi
+
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: security-report.md
+
+  notify-security-issues:
+    needs: security-checks
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send Notification
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Security Scan Failed',
+              body: 'Security scan detected issues. Please check the latest security report.'
+            })

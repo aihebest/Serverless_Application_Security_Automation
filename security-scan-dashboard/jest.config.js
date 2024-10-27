@@ -1,25 +1,28 @@
-// jest.config.js
+# security-scan-dashboard/jest.config.js
 module.exports = {
-    testEnvironment: 'jsdom',
-    setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.js'],
-    moduleNameMapper: {
-      '^@/(.*)$': '<rootDir>/src/$1',
-      '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
-    },
-    collectCoverageFrom: [
-      'src/**/*.{js,jsx}',
-      '!src/index.js',
-      '!src/reportWebVitals.js'
-    ],
-    coverageThreshold: {
-      global: {
-        branches: 80,
-        functions: 80,
-        lines: 80,
-        statements: 80
-      }
-    },
-    testMatch: [
-      '<rootDir>/src/__tests__/**/*.test.{js,jsx}'
-    ]
-  };
+  roots: ['<rootDir>/src'],
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx,ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/index.js',
+    '!src/serviceWorker.js'
+  ],
+  setupFiles: ['<rootDir>/src/setupTests.js'],
+  setupFilesAfterEnv: [],
+  testMatch: [
+    '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    '<rootDir>/src/**/*.{spec,test}.{js,jsx,ts,tsx}'
+  ],
+  testEnvironment: 'jsdom',
+  transform: {
+    '^.+\\.(js|jsx|ts|tsx)$': '<rootDir>/node_modules/babel-jest'
+  },
+  transformIgnorePatterns: [
+    '[/\\\\]node_modules[/\\\\].+\\.(js|jsx|ts|tsx)$',
+    '^.+\\.module\\.(css|sass|scss)$'
+  ],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1'
+  },
+  moduleFileExtensions: ['js', 'jsx', 'json', 'node']
+};

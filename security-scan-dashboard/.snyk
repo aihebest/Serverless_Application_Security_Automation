@@ -1,0 +1,71 @@
+# File: ./security-scan-dashboard/.snyk
+version: v1.25.0
+
+# Ignore specific vulnerabilities
+ignore:
+  'SNYK-JS-REACTDEVUTILS-1083268':
+    - 'react-scripts > react-dev-utils':
+        reason: 'Development dependency only - not exposed in production'
+        expires: 2024-12-31T00:00:00.000Z
+  
+  'SNYK-JS-ANSIHTML-1296849':
+    - '*':
+        reason: 'Development server dependency - not in production build'
+        expires: 2024-12-31T00:00:00.000Z
+        
+  'SNYK-JS-BROWSERSLIST-1090194':
+    - '*':
+        reason: 'Dependency of build tools - not in production'
+        expires: 2024-12-31T00:00:00.000Z
+
+  'SNYK-JS-POSTCSS-1090595':
+    - '*':
+        reason: 'Build tool dependency - not in production bundle'
+        expires: 2024-12-31T00:00:00.000Z
+
+# Exclude patterns
+exclude:
+  global:
+    # Directories to exclude from scanning
+    - node_modules/
+    - build/
+    - coverage/
+    - public/
+    - .git/
+    - "**/*.test.js"
+    - "**/*.spec.js"
+    - "**/__tests__/"
+    - "**/__mocks__/"
+
+# Patch settings
+patch: true
+
+# Security policy settings
+policy:
+  patch:
+    'npm:debug:*': 0
+    'npm:ms:*': 0
+  'ignore-policy': false
+
+# Monitor project settings
+monitor:
+  # Files/directories to include in monitoring
+  include:
+    - 'src/**/*.js'
+    - 'src/**/*.jsx'
+    - 'package.json'
+    - 'package-lock.json'
+  
+  # Files/directories to exclude from monitoring
+  exclude:
+    - '**/*.test.js'
+    - '**/*.spec.js'
+    - 'src/__tests__/'
+    - 'src/__mocks__/'
+
+# Custom rules
+custom-rules:
+  high-severity-packages:
+    - package: '*'
+      severity: high
+      path: '*'

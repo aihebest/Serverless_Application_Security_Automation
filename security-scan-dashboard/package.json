@@ -4,13 +4,18 @@
   "private": true,
   "scripts": {
     "start": "react-scripts start",
-    "build": "DISABLE_ESLINT_PLUGIN=true CI=false react-scripts build",
+    "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
+    "security-check": "npm audit && snyk test",
+    "security-monitor": "snyk monitor",
+    "dependency-check": "dependency-check . --project 'Security Scanner' --format HTML --out ./reports",
+    "security-full": "npm run security-check && npm run dependency-check && npm run security-monitor",
     "lint": "eslint src/**/*.{js,jsx,ts,tsx}",
     "lint:fix": "eslint --fix src/**/*.{js,jsx,ts,tsx}",
     "format": "prettier --write src/**/*.{js,jsx,ts,tsx,css,md,json}",
-    "oryx-build": "npm install --legacy-peer-deps && npm run build"
+    "analyze": "source-map-explorer 'build/static/js/*.js'",
+    "precommit": "lint-staged"
   },
   "dependencies": {
     "@azure/msal-browser": "2.38.0",
@@ -18,8 +23,8 @@
     "@fluentui/react-components": "9.30.0",
     "@fluentui/react-icons": "2.0.204",
     "@microsoft/applicationinsights-web": "3.0.5",
-    "@microsoft/signalr": "7.0.14",
-    "axios": "1.6.0",
+    "@microsoft/applicationinsights-react-js": "3.4.3",
+    "axios": "1.6.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-router-dom": "6.22.0",
@@ -29,9 +34,8 @@
   "devDependencies": {
     "@babel/core": "7.23.9",
     "@babel/plugin-proposal-private-property-in-object": "7.21.11",
-    "@babel/preset-env": "7.23.9",
-    "@babel/preset-react": "7.23.9",
-    "@babel/preset-typescript": "7.23.9",
+    "@babel/preset-env": "7.23.3",
+    "@babel/preset-react": "7.23.3",
     "@testing-library/jest-dom": "6.4.0",
     "@testing-library/react": "14.2.0",
     "@testing-library/user-event": "14.5.2",
@@ -41,6 +45,7 @@
     "@types/react-dom": "18.2.18",
     "@typescript-eslint/eslint-plugin": "5.62.0",
     "@typescript-eslint/parser": "5.62.0",
+    "dependency-check": "^4.1.0",
     "eslint": "8.45.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-config-react-app": "7.0.1",
@@ -49,10 +54,23 @@
     "eslint-plugin-prettier": "5.1.3",
     "eslint-plugin-react": "7.33.2",
     "eslint-plugin-react-hooks": "4.6.0",
+    "husky": "8.0.3",
     "jest": "29.7.0",
     "jest-environment-jsdom": "29.7.0",
+    "lint-staged": "15.2.0",
     "prettier": "3.2.5",
+    "snyk": "^1.1250.0",
+    "source-map-explorer": "^2.5.3",
     "typescript": "4.9.5"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "src/**/*.{css,scss,md,json}": [
+      "prettier --write"
+    ]
   },
   "browserslist": {
     "production": [
@@ -90,13 +108,6 @@
     "tabWidth": 2,
     "semi": true,
     "printWidth": 100
-  },
-  "resolutions": {
-    "@typescript-eslint/parser": "5.62.0",
-    "@typescript-eslint/eslint-plugin": "5.62.0",
-    "typescript": "4.9.5",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
   },
   "engines": {
     "node": ">=18.20.4",
